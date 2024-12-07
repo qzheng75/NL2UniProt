@@ -4,3 +4,4 @@
 pip install -e .
 pip install flash-attn --no-build-isolation
 pip install faesm[flash_attn]
+pre-commit install

@@ -13,7 +13,7 @@ repos:
       entry: pyright
       language: python
       types: [python]
-      additional_dependencies: ['pandas', 'beautifulsoup4', 'prettytable']
+      # additional_dependencies: ['pandas', 'beautifulsoup4', 'prettytable']
 
 # -   repo: https://github.com/RobertCraigie/pyright-python
 #     rev: v1.1.390
