@@ -1,8 +1,91 @@
 [build-system]
-requires = ["flit_core >=3.2,<4"]
+requires = ["flit_core >=3.2,<4", "torch"]
 build-backend = "flit_core.buildapi"
 
 [project]
-name = "lumache"
-authors = [{name = "Graziella", email = "graziella@lumache"}]
-dynamic = ["version", "description"]
+name = "nl2prot"
+version = "0.1.0"
+description = "A natural language tool for using natural language to query UniProt protein database"
+authors = [
+    { name = "Qianyu Zheng", email = "zhengqianyu0227@gmail.com" }
+]
+readme = "README.rst"
+requires-python = ">=3.12"  # Adjust based on your minimum Python version requirement
+dependencies = [
+    "pyyaml",
+    "tqdm",
+    "numpy",
+    "pandas",
+    "scanpy",
+    "scikit-learn",
+    "transformers",
+    "python-dotenv",
+    "lightning",
+    "ruff",
+    "pyright",
+    "pre-commit",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pre-commit",
+    "ruff",
+    "pyright",
+]
+
+[project.urls]
+Homepage = "https://github.com/qzheng75/NL2UniProt"
+Repository = "https://github.com/qzheng75/NL2UniProt"
+
+[tool.pyright]
+typeCheckingMode = "standard"
+include = ["src/nl2prot"]
+exclude = [
+    "**/__pycache__",
+    "**/node_modules",
+    "build",
+    "dist",
+]
+deprecateTypingAliases = true
+strictListInference = true
+strictDictionaryInference = true
+strictSetInference = true
+reportPrivateImportUsage = false
+reportMatchNotExhaustive = "error"
+reportImplicitOverride = "warning"
+reportShadowedImports = "warning"
+
+[tool.ruff]
+line-length = 88
+indent-width = 4
+target-version = "py38"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "FA",  # flake8-future-annotations
+]
+ignore = [
+    "F722",  # forward annotation syntax error
+    "F821",  # undefined name
+    "E731",  # lambda expressions
+    "E741",  # ambiguous variable names
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+docstring-code-format = true
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+required-imports = ["from __future__ import annotations"]
+
+[tool.flit.module]
+name = "nl2prot"
+source = "src"

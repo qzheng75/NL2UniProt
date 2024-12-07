@@ -1,0 +1,21 @@
+repos:
+-   repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.1.13  # Replace with the latest version from https://github.com/astral-sh/ruff/releases
+    hooks:
+    -   id: ruff
+        args: [--fix]
+    -   id: ruff-format
+
+- repo: local
+  hooks:
+    - id: pyright
+      name: pyright
+      entry: pyright
+      language: python
+      types: [python]
+      additional_dependencies: ['pandas', 'beautifulsoup4', 'prettytable']
+
+# -   repo: https://github.com/RobertCraigie/pyright-python
+#     rev: v1.1.390
+#     hooks:
+#     - id: pyright
