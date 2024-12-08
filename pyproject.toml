@@ -16,6 +16,7 @@ dependencies = [
     "tqdm",
     "numpy",
     "pandas",
+    "scipy",
     "scanpy",
     "scikit-learn",
     "transformers",

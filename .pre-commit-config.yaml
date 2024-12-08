@@ -6,14 +6,15 @@ repos:
         args: [--fix]
     -   id: ruff-format
 
-- repo: local
-  hooks:
-    - id: pyright
-      name: pyright
-      entry: pyright
-      language: python
-      types: [python]
-      # additional_dependencies: ['pandas', 'beautifulsoup4', 'prettytable']
+-   repo: https://github.com/RobertCraigie/pyright-python
+    rev: v1.1.390
+    hooks:
+      - id: pyright
+        name: pyright
+        entry: bash -c 'PYTHONPATH=$CONDA_PREFIX/lib/python3.12/site-packages pyright'
+        language: system
+        types: [python]
+        require_serial: true
 
 # -   repo: https://github.com/RobertCraigie/pyright-python
 #     rev: v1.1.390

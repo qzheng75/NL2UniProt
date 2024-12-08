@@ -6,6 +6,7 @@ from typing import Any, override
 import numpy as np
 import torch
 from faesm.esm import FAEsmForMaskedLM
+from nl2prot.models.base_model import BaseModel
 from torch import Tensor, nn
 from transformers import BertModel
 
@@ -30,7 +31,7 @@ class ProjectionEncoder(nn.Module):
         return torch.nn.functional.normalize(features, dim=-1)
 
 
-class FAEsmBertEncoder(nn.Module):
+class FAEsmBertEncoder(BaseModel):
     def __init__(
         self,
         bert_model_name="bert-base-uncased",
@@ -85,7 +86,8 @@ class FAEsmBertEncoder(nn.Module):
             for param in layer.parameters():
                 param.requires_grad = False
 
-    def trainable_parameters(self):
+    @override
+    def trainable_parameters(self) -> dict[str, list[nn.Parameter]]:
         """Get trainable parameters grouped by component"""
         desc_params = [p for p in self.desc_encoder.parameters() if p.requires_grad]
         prot_params = [p for p in self.prot_encoder.parameters() if p.requires_grad]
