@@ -1,37 +1,31 @@
 from __future__ import annotations
 
+from typing import override
+
 import torch
 from nl2prot.template.module_configs import SchedulerConfig
-from torch import nn
+from torch.optim.lr_scheduler import _LRScheduler
 
 
-class LRScheduler:
+class LRScheduler(_LRScheduler):
     """wrapper around torch.optim.lr_scheduler._LRScheduler"""
 
     def __init__(
-        self,
-        optimizer: torch.optim.Optimizer,
-        scheduler_type: str,
-        model_parameters: dict[str, nn.Parameter],
+        self, optimizer: torch.optim.Optimizer, scheduler_config: SchedulerConfig
     ):
         self.optimizer = optimizer
-        self.scheduler_type = scheduler_type
+        self.scheduler_type = scheduler_config.scheduler_type
 
-        self.scheduler = getattr(torch.optim.lr_scheduler, self.scheduler_type)(
-            optimizer, **model_parameters
-        )
+        self.scheduler: _LRScheduler = getattr(
+            torch.optim.lr_scheduler, self.scheduler_type
+        )(optimizer, **scheduler_config.scheduler_args)
 
-        self.lr = self.optimizer.param_groups[0]["lr"]
+        self.lr: dict[str, float] = {
+            group["name"]: group["lr"] for group in optimizer.param_groups
+        }
 
-    @classmethod
-    def from_config(
-        cls, optimizer: torch.optim.Optimizer, optim_config: SchedulerConfig
-    ) -> LRScheduler:
-        scheduler_type = optim_config.scheduler_type
-        scheduler_args = optim_config.scheduler_args
-        return cls(optimizer, scheduler_type, **scheduler_args)
-
-    def step(self, metrics=None, epoch=None):
+    @override
+    def step(self, epoch=None, metrics=None):
         if self.scheduler_type == "Null":
             return
         if self.scheduler_type == "ReduceLROnPlateau":
@@ -46,4 +40,4 @@ class LRScheduler:
 
     def update_lr(self):
         for param_group in self.optimizer.param_groups:
-            self.lr = param_group["lr"]
+            self.lr[param_group["name"]] = param_group["lr"]

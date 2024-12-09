@@ -6,7 +6,7 @@ from typing import Any, override
 import numpy as np
 import torch
 from faesm.esm import FAEsmForMaskedLM
-from nl2prot.models.base_model import BaseModel
+from nl2prot.models.base_model import BaseDualEncoder
 from torch import Tensor, nn
 from transformers import BertModel
 
@@ -31,7 +31,7 @@ class ProjectionEncoder(nn.Module):
         return torch.nn.functional.normalize(features, dim=-1)
 
 
-class FAEsmBertEncoder(BaseModel):
+class FAEsmBertEncoder(BaseDualEncoder):
     def __init__(
         self,
         bert_model_name="bert-base-uncased",
@@ -43,12 +43,11 @@ class FAEsmBertEncoder(BaseModel):
     ) -> None:
         super(FAEsmBertEncoder, self).__init__()
 
+        # config = {'cache_dir': os.environ["MODEL_CACHE"]}
         bert = BertModel.from_pretrained(
             bert_model_name, cache_dir=os.environ["MODEL_CACHE"]
         )
-        esm = FAEsmForMaskedLM.from_pretrained(
-            esm_model_name, cache_dir=os.environ["MODEL_CACHE"]
-        )
+        esm = FAEsmForMaskedLM.from_pretrained(esm_model_name)
 
         self._freeze_bert_layers(bert, num_unfrozen_bert_layers)
         self._freeze_esm_layers(esm, num_unfrozen_esm_layers)
@@ -99,7 +98,9 @@ class FAEsmBertEncoder(BaseModel):
         }
 
     @override
-    def forward(self, batch: Any, return_embeddings=False) -> dict[str, Tensor]:
+    def forward(
+        self, batch: Any, return_embeddings=False, **kwargs
+    ) -> dict[str, Tensor] | Tensor:
         names = batch["names"]
         prot_emb = batch["sequences"]
         desc_emb = batch["descriptions"]

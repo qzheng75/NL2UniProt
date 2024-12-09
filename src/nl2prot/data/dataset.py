@@ -142,12 +142,13 @@ class RawDescSeqDataset(Dataset):
         return len(self.names)
 
     @override
-    def __getitem__(self, idx: int) -> dict[str, Any]:
-        return {
-            "name": self.names[idx],
-            "sequence": self.sequences[idx],
-            "description": self.descriptions[idx],
-        }
+    def __getitem__(self, idx: int) -> tuple[str, str, str]:
+        # return {
+        #     "name": self.names[idx],
+        #     "sequence": self.sequences[idx],
+        #     "description": self.descriptions[idx],
+        # }
+        return self.names[idx], self.sequences[idx], self.descriptions[idx]
 
 
 # DEEPLOC_CLASSES = [

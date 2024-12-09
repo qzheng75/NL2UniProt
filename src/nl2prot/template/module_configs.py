@@ -3,17 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
-
-@dataclass
-class MetricConfig:
-    metric_type: Literal["TopKAcc"]
-    metric_args: dict[str, Any]
+# @dataclass
+# class MetricConfig:
+#     metric_type: Literal["TopKAcc"]
+#     metric_args: dict[str, Any]
 
 
 @dataclass
 class LossConfig:
-    loss_type: Literal["CLIPLoss", "TorchLossWrapper"] = "CLIPLoss"
-    loss_args: dict[str, Any] = {}
+    loss_type: Literal["CLIPLoss", "TorchLossWrapper"]
+    loss_args: dict[str, Any]
 
 
 @dataclass
@@ -37,12 +36,13 @@ class SchedulerConfig:
 @dataclass
 class DatasetConfig:
     dataset_type: Literal["RawDescSeqDataset", "EmbeddedDescDataset"]
-    dataset_args: dict[str, Any]
+    dataset_args: dict[str, dict[str, Any]]
 
 
 @dataclass
 class DataloaderConfig:
     batch_size: int
+    split: Literal["train", "val", "test"]
     collate_fn: Literal["default", "dual_encoder_collate_fn"]
     collate_args: dict[str, Any]
     sampler_type: Literal["RandomSampler"]

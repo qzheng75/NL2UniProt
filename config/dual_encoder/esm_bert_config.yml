@@ -1,0 +1,55 @@
+loss:
+  loss_type: CLIPLoss
+  loss_args: {}
+
+model:
+  model_type: faesm_bert.FAEsmBertEncoder
+  model_args:
+    bert_model_name: prajjwal1/bert-small
+    esm_model_name: facebook/esm2_t30_150M_UR50D
+    num_unfrozen_bert_layers: 4
+    num_unfrozen_esm_layers: 4
+
+optimizer:
+  optimizer_type: Adam
+  optimizer_args:
+    desc:
+      lr: 0.00005
+    prot:
+      lr: 0.00005
+    other:
+      lr: 0.001
+
+scheduler:
+  scheduler_type: ReduceLROnPlateau
+  scheduler_args:
+    mode: min
+    factor: 0.5
+    patience: 5
+    threshold: 0.0001
+    threshold_mode: abs
+
+dataset:
+  dataset_type: RawDescSeqDataset
+  dataset_args:
+    train:
+      adata_path: raw_data/adata/human_adata.h5ad
+      desc_path: raw_data/misc/train_desc.json
+      use_ratio: 1.
+    val:
+      adata_path: raw_data/adata/human_adata.h5ad
+      desc_path: raw_data/misc/val_desc.json
+      use_ratio: 1.0
+
+dataloader:
+  batch_size: 16
+  collate_fn: dual_encoder_collate_fn
+  collate_args:
+    seq_tokenizer_args:
+      pretrained_model_name_or_path: facebook/esm2_t30_150M_UR50D #facebook/esm2_t30_150M_UR50D
+    desc_tokenizer_args:
+      pretrained_model_name_or_path: prajjwal1/bert-small
+  sampler_type: RandomSampler
+  sampler_args: {}
+
+pl_module: DualEncoder

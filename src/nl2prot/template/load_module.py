@@ -1,18 +1,25 @@
 from __future__ import annotations
 
 import importlib
+from typing import Any, Literal
 
+import yaml
+from nl2prot.data import dataset
+from nl2prot.data.collate import get_dataloader
+from nl2prot.data.utils import split_dataset
 from nl2prot.models.base_model import BaseModel
 from nl2prot.modules import loss
-from nl2prot.modules.evaluator import Evaluator
+from nl2prot.modules.scheduler import LRScheduler
 from nl2prot.template.module_configs import (
+    DataloaderConfig,
+    DatasetConfig,
     LossConfig,
-    MetricConfig,
     ModelConfig,
     OptimizerConfig,
     SchedulerConfig,
 )
 from torch import nn, optim
+from torch.utils.data import DataLoader, Dataset
 
 
 def load_loss(config: LossConfig) -> nn.Module:
@@ -21,10 +28,10 @@ def load_loss(config: LossConfig) -> nn.Module:
     return getattr(loss, loss_type)(**loss_args)
 
 
-def load_evaluator(config: MetricConfig) -> Evaluator:
-    metric_type = config.metric_type
-    metric_args = config.metric_args
-    return Evaluator(metric=metric_type, **metric_args)
+# def load_evaluator(config: MetricConfig) -> Evaluator:
+#     metric_type = config.metric_type
+#     metric_args = config.metric_args
+#     return Evaluator(metric=metric_type, **metric_args)
 
 
 def load_model(config: ModelConfig) -> BaseModel:
@@ -48,16 +55,78 @@ def load_optimizer(config: OptimizerConfig, model: BaseModel) -> optim.Optimizer
     for group_name, params in param_groups.items():
         config_for_group = optimizer_args.get(group_name, {})
         assert "lr" in config_for_group, f"Learning rate not provided for {group_name}"
-        optim_groups.append({"params": params, **config_for_group})
+        optim_groups.append({"name": group_name, "params": params, **config_for_group})
 
     return optimizer_cls(optim_groups)
 
 
-def load_scheduler(
-    config: SchedulerConfig, optimizer: optim.Optimizer
-) -> optim.lr_scheduler._LRScheduler:
-    scheduler_type = config.scheduler_type
-    scheduler_args = config.scheduler_args
-    scheduler_cls = getattr(optim.lr_scheduler, scheduler_type)
+def load_scheduler(config: SchedulerConfig, optimizer: optim.Optimizer) -> LRScheduler:
+    return LRScheduler(optimizer, config)
 
-    return scheduler_cls(optimizer, **scheduler_args)
+
+def load_dataset(
+    config: DatasetConfig,
+) -> dict[Literal["train", "val", "test"], Dataset]:
+    dataset_type = config.dataset_type
+    dataset_cls = getattr(dataset, dataset_type)
+
+    dataset_args = config.dataset_args
+    datasets: dict[Literal["train", "val", "test"], Dataset] = {}
+    for key, args in dataset_args.items():
+        if key in ("train", "val", "test"):
+            use_ratio = args.pop("use_ratio", None)
+            ds: Dataset = dataset_cls(**args)
+            if use_ratio:
+                ds, _, _ = split_dataset(
+                    ds, train_size=use_ratio, valid_size=0.0, test_size=0.0
+                )
+            datasets[key] = ds
+
+    return datasets
+
+
+def load_dataloader(config: DataloaderConfig, dataset: Dataset) -> DataLoader:
+    return get_dataloader(dataset, config)
+
+
+def load_everything(config_path: str) -> dict[str, Any]:
+    with open(config_path, "r") as f:
+        config = yaml.safe_load(f)
+
+    loss_config = LossConfig(**config["loss"])
+    loss = load_loss(loss_config)
+
+    model_config = ModelConfig(**config["model"])
+    model = load_model(model_config)
+
+    optimizer_config = OptimizerConfig(**config["optimizer"])
+    optimizer = load_optimizer(optimizer_config, model)
+
+    scheduler_config = SchedulerConfig(**config["scheduler"])
+    scheduler = load_scheduler(scheduler_config, optimizer)
+
+    dataset_config = DatasetConfig(**config["dataset"])
+    datasets = load_dataset(dataset_config)
+
+    dataloader_configs: dict[Literal["train", "val", "test"], DataloaderConfig] = {
+        k: DataloaderConfig(split=k, **config["dataloader"]) for k in datasets.keys()
+    }
+    dataloaders = {
+        k: load_dataloader(v, datasets[k]) for k, v in dataloader_configs.items()
+    }
+
+    pl_module = config["pl_module"]
+    if pl_module == "DualEncoder":
+        from nl2prot.models.base_model import BaseDualEncoder
+        from nl2prot.trainer.dual_encoder_pl import DualEncoderPl
+
+        assert isinstance(
+            model, BaseDualEncoder
+        ), "Model must be a Dual Encoder model to use DualEncoderPl"
+
+        pl_module = DualEncoderPl(
+            model=model, loss_fn=loss, optimizer=optimizer, scheduler=scheduler
+        )
+        return {"pl_module": pl_module, **dataloaders}
+    else:
+        raise ValueError(f"Unknown pl_module: {pl_module}")
