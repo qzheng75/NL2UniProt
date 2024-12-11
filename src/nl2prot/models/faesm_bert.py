@@ -26,7 +26,12 @@ class ProjectionEncoder(nn.Module):
     @override
     def forward(self, **x: dict[str, Tensor]) -> Tensor:
         outputs = self.encoder(**x)
-        embeddings = outputs.last_hidden_state[:, 0, :]  # [CLS] token
+
+        if isinstance(outputs, dict):
+            assert "last_hidden_state" in outputs
+            embeddings = outputs["last_hidden_state"][:, 0, :]
+        else:
+            embeddings = outputs.last_hidden_state[:, 0, :]  # [CLS] token
         features = self.projection(embeddings)
         return torch.nn.functional.normalize(features, dim=-1)
 

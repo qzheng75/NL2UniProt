@@ -33,7 +33,7 @@ class DualEncoderPl(pl.LightningModule):
 
     @override
     def training_step(self, batch, batch_idx):
-        out = self(batch, return_embeddings=True)
+        out = self(batch, return_embeddings=False)
         loss = self.loss_fn(out)
         self.log("train/loss", loss, on_step=True, on_epoch=True, prog_bar=True)
 
@@ -49,7 +49,7 @@ class DualEncoderPl(pl.LightningModule):
 
     @override
     def validation_step(self, batch, batch_idx):
-        out = self(batch, return_embeddings=True)
+        out = self(batch, return_embeddings=False)
         loss = self.loss_fn(out)
         self.log("val/loss", loss, on_step=True, on_epoch=True, prog_bar=True)
         return loss

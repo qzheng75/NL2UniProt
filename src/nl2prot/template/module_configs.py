@@ -55,7 +55,7 @@ class SaveModelConfig:
     save_model_path: str = "trained_models/"
     filename: str = "model-{epoch:02d}"
     mode: str = "max"
-    monitor: str = "val_avg_k_acc"
+    monitor: str = "val/loss"
     save_top_k: int = 1
     every_n_epoch: int = 1
 
@@ -69,8 +69,9 @@ class LoggerConfig:
 @dataclass
 class TrainerConfig:
     max_epochs: int
-    save_model_config: SaveModelConfig
-    logger_config: LoggerConfig
+    resume_from_checkpoint: str | None = None
+    save_model_config: SaveModelConfig | None = None
+    logger_config: LoggerConfig | None = None
     precision: str = "bf16-mixed"
     log_every_n_steps: int = 50
     check_val_every_n_epoch: int = 1
@@ -78,5 +79,5 @@ class TrainerConfig:
     gradient_clip_val: float = 0.0
     accelerator: Literal["gpu", "auto"] = "auto"
     devices: list[int] | None = None
-    strategy: Literal["ddp"] | None = None
+    strategy: Literal["ddp", "auto"] = "auto"
     enable_progress_bar: bool = True

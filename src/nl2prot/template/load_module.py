@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 from typing import Any, Literal
 
+import pytorch_lightning as pl
 import yaml
 from nl2prot.data import dataset
 from nl2prot.data.collate import get_dataloader
@@ -13,11 +14,16 @@ from nl2prot.modules.scheduler import LRScheduler
 from nl2prot.template.module_configs import (
     DataloaderConfig,
     DatasetConfig,
+    LoggerConfig,
     LossConfig,
     ModelConfig,
     OptimizerConfig,
+    SaveModelConfig,
     SchedulerConfig,
+    TrainerConfig,
 )
+from pytorch_lightning import loggers
+from pytorch_lightning.callbacks import ModelCheckpoint
 from torch import nn, optim
 from torch.utils.data import DataLoader, Dataset
 
@@ -72,10 +78,12 @@ def load_dataset(
 
     dataset_args = config.dataset_args
     datasets: dict[Literal["train", "val", "test"], Dataset] = {}
+    common_args = dataset_args.pop("common", {})
+
     for key, args in dataset_args.items():
         if key in ("train", "val", "test"):
             use_ratio = args.pop("use_ratio", None)
-            ds: Dataset = dataset_cls(**args)
+            ds: Dataset = dataset_cls(**args, **common_args)
             if use_ratio:
                 ds, _, _ = split_dataset(
                     ds, train_size=use_ratio, valid_size=0.0, test_size=0.0
@@ -87,6 +95,55 @@ def load_dataset(
 
 def load_dataloader(config: DataloaderConfig, dataset: Dataset) -> DataLoader:
     return get_dataloader(dataset, config)
+
+
+def load_pl_logger(config: LoggerConfig) -> loggers.Logger:
+    logger_cls = getattr(loggers, config.logger_type)
+    return logger_cls(**config.logger_args)
+
+
+def load_pl_model_save(config: SaveModelConfig) -> ModelCheckpoint | None:
+    if not config.save_model:
+        return None
+
+    return ModelCheckpoint(
+        dirpath=config.save_model_path,
+        filename=config.filename,
+        monitor=config.monitor,
+        mode=config.mode,
+        save_top_k=config.save_top_k,
+        every_n_epochs=config.every_n_epoch,
+    )
+
+
+def load_trainer(config: TrainerConfig) -> pl.Trainer:
+    if config.logger_config is not None:
+        logger = load_pl_logger(config.logger_config)
+    else:
+        logger = None
+
+    if config.save_model_config is not None:
+        model_save = load_pl_model_save(config.save_model_config)
+    else:
+        model_save = None
+
+    devices = config.devices if config.devices is not None else -1
+    callbacks = [model_save] if model_save else None
+
+    return pl.Trainer(
+        max_epochs=config.max_epochs,
+        logger=False if logger is None else logger,
+        callbacks=callbacks,  # type: ignore
+        precision=config.precision,  # type: ignore
+        log_every_n_steps=config.log_every_n_steps,
+        check_val_every_n_epoch=config.check_val_every_n_epoch,
+        accumulate_grad_batches=config.accumulate_grad_batches,
+        gradient_clip_val=config.gradient_clip_val,
+        accelerator=config.accelerator,
+        devices=devices,
+        strategy=str(config.strategy),
+        enable_progress_bar=config.enable_progress_bar,
+    )
 
 
 def load_everything(config_path: str) -> dict[str, Any]:
@@ -127,6 +184,30 @@ def load_everything(config_path: str) -> dict[str, Any]:
         pl_module = DualEncoderPl(
             model=model, loss_fn=loss, optimizer=optimizer, scheduler=scheduler
         )
-        return {"pl_module": pl_module, **dataloaders}
     else:
         raise ValueError(f"Unknown pl_module: {pl_module}")
+
+    if "logger" in config:
+        logger_config = LoggerConfig(**config["logger"])
+    else:
+        logger_config = None
+
+    if "save_model" in config:
+        save_model_config = SaveModelConfig(**config["save_model"])
+    else:
+        save_model_config = None
+
+    trainer_config = TrainerConfig(
+        logger_config=logger_config,
+        save_model_config=save_model_config,
+        **config["trainer"],
+    )
+
+    trainer = load_trainer(trainer_config)
+
+    return {
+        "pl_module": pl_module,
+        "checkpoint": trainer_config.resume_from_checkpoint,
+        "trainer": trainer,
+        **dataloaders,
+    }

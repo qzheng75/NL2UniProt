@@ -23,6 +23,8 @@ dependencies = [
     "python-dotenv",
     "lightning",
     "biopython",
+    "wandb",
+    "tensorboard",
     "ruff",
     "pyright",
     "pre-commit",

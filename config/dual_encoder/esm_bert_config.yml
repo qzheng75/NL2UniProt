@@ -6,7 +6,7 @@ model:
   model_type: faesm_bert.FAEsmBertEncoder
   model_args:
     bert_model_name: prajjwal1/bert-small
-    esm_model_name: facebook/esm2_t30_150M_UR50D
+    esm_model_name: facebook/esm2_t12_35M_UR50D
     num_unfrozen_bert_layers: 4
     num_unfrozen_esm_layers: 4
 
@@ -35,21 +35,41 @@ dataset:
     train:
       adata_path: raw_data/adata/human_adata.h5ad
       desc_path: raw_data/misc/train_desc.json
-      use_ratio: 1.
+      use_ratio: 0.1
     val:
       adata_path: raw_data/adata/human_adata.h5ad
       desc_path: raw_data/misc/val_desc.json
-      use_ratio: 1.0
+      use_ratio: 0.1
 
 dataloader:
   batch_size: 16
   collate_fn: dual_encoder_collate_fn
   collate_args:
     seq_tokenizer_args:
-      pretrained_model_name_or_path: facebook/esm2_t30_150M_UR50D #facebook/esm2_t30_150M_UR50D
+      pretrained_model_name_or_path: facebook/esm2_t12_35M_UR50D #facebook/esm2_t30_150M_UR50D
     desc_tokenizer_args:
       pretrained_model_name_or_path: prajjwal1/bert-small
   sampler_type: RandomSampler
   sampler_args: {}
+
+logger:
+  logger_type: WandbLogger
+  logger_args:
+    project: NL2UniProt
+    name: ESM150M-SmallBERT-FAE-training
+    offline: False
+
+save_model:
+  save_model: True
+  save_model_path: trained_models/esm150m_smallbert_fae
+
+trainer:
+  max_epochs: 5
+  devices: [0]
+  resume_from_checkpoint: trained_models/esm150m_smallbert_fae/model-epoch=00.ckpt
+  # precision: 32
+  # strategy: ddp
+  # resume_from_checkpoint: None
+
 
 pl_module: DualEncoder

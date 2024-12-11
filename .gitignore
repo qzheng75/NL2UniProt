@@ -156,3 +156,6 @@ cython_debug/
 # End of https://www.toptal.com/developers/gitignore/api/python,jupyternotebooks
 *dev*
 raw_data/
+wandb/
+lightning_logs/
+trained_models/
