@@ -2,14 +2,11 @@ from __future__ import annotations
 
 import json
 import random
-from collections import namedtuple
 from collections.abc import Callable
 from itertools import chain
 from typing import Any, override
 
-import torch
 from scanpy import read
-from torch import Tensor
 from torch.utils.data import Dataset
 
 
@@ -48,52 +45,32 @@ def apply_key_transform(
 
 
 class ProtDataset(Dataset):
-    def __init__(self, x, names) -> None:
-        self.idx2entry_map = {i: names[i] for i in range(len(x))}
+    def __init__(self, raw_sequences: list[str], accessions: list[str]) -> None:
+        self.idx2entry_map = {i: accessions[i] for i in range(len(accessions))}
         self.entry2idx_map = {v: k for k, v in self.idx2entry_map.items()}
-        self.seq_embed = torch.tensor(x, dtype=torch.float32)
+        self.raw_sequences = raw_sequences
 
     def __len__(self) -> int:
-        return len(self.seq_embed)
+        return len(self.raw_sequences)
 
     @override
-    def __getitem__(self, idx: int) -> tuple[Tensor, str]:
-        return self.seq_embed[idx], self.idx2entry_map[idx]
+    def __getitem__(self, idx: int) -> tuple[str, str]:
+        return self.idx2entry_map[idx], self.raw_sequences[idx]
 
 
-class EmbeddedDescDataset(Dataset):
+class DescDataset(Dataset):
     def __init__(
-        self,
-        adata_path: str,
-        desc_embed_path: str,
+        self, descriptions: list[str], accessions: list[str] | None = None
     ) -> None:
-        adata = read(adata_path)
-        desc_embed = torch.load(desc_embed_path)
-
-        desc_dict = merge_dictionaries(
-            desc_embed, desc_embed, key_transform=lambda x: x.split("|")[0]
-        )
-        self.desc_name_tuples = []
-        EmbEntry = namedtuple("EmbEntry", ["name", "emb"])
-        for key, item in desc_dict.items():
-            for emb in item:
-                self.desc_name_tuples.append(EmbEntry(key, emb))
-
-        self.prot_dataset = ProtDataset(adata.X, adata.obs["accession"])
+        self.descriptions = descriptions
+        self.accessions = accessions
 
     def __len__(self) -> int:
-        return len(self.desc_name_tuples)
+        return len(self.descriptions)
 
     @override
-    def __getitem__(self, idx: int) -> dict[str, Any]:
-        name, emb = self.desc_name_tuples[idx]
-        prot_emb, prot_name = self.prot_dataset[self.prot_dataset.entry2idx_map[name]]
-        return {
-            "prot_emb": prot_emb,
-            "desc_emb": emb,
-            "prot_name": prot_name,
-            "desc_name": name,
-        }
+    def __getitem__(self, idx: int) -> tuple[str | None, str]:
+        return self.accessions[idx] if self.accessions else None, self.descriptions[idx]
 
 
 class RawDescSeqDataset(Dataset):
@@ -116,11 +93,6 @@ class RawDescSeqDataset(Dataset):
             name2seq_dict, desc_dict_with_names, allow_repeat_keys=True
         )
         data = dict(filter(lambda x: len(x[1]) != 1, data.items()))
-
-        # self.names = list(data.keys())
-        # vals = list(data.values())
-        # self.sequences = [entry[0] for entry in vals]
-        # self.descriptions = [entry[1] for entry in vals]
 
         names, sequences, descriptions = [], [], []
         for key, val in data.items():

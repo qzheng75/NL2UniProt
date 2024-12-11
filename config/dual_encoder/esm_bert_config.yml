@@ -52,12 +52,12 @@ dataloader:
   sampler_type: RandomSampler
   sampler_args: {}
 
-logger:
-  logger_type: WandbLogger
-  logger_args:
-    project: NL2UniProt
-    name: ESM150M-SmallBERT-FAE-training
-    offline: False
+# logger:
+#   logger_type: WandbLogger
+#   logger_args:
+#     project: NL2UniProt
+#     name: ESM150M-SmallBERT-FAE-training
+#     offline: False
 
 save_model:
   save_model: True
@@ -66,7 +66,7 @@ save_model:
 trainer:
   max_epochs: 5
   devices: [0]
-  resume_from_checkpoint: trained_models/esm150m_smallbert_fae/model-epoch=00.ckpt
+  # resume_from_checkpoint: trained_models/esm150m_smallbert_fae/model-epoch=00.ckpt
   # precision: 32
   # strategy: ddp
   # resume_from_checkpoint: None

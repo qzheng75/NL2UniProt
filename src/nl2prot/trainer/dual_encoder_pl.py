@@ -56,9 +56,23 @@ class DualEncoderPl(pl.LightningModule):
 
     @override
     def test_step(self, batch, batch_idx):
-        out = self(batch, return_embeddings=True)
+        out = self(batch, return_embeddings=False)
         loss = self.loss_fn(out)
         return loss
+
+    @override
+    def predict_step(self, batch, batch_idx, dataloader_idx=None):
+        assert "batch_type" in batch.keys(), "batch_type must be present in batch"
+        batch_type = batch["batch_type"]
+
+        if batch_type == "sequence":
+            assert self.model.prot_encoder is not None, "Protein encoder not set"
+            encoder = self.model.prot_encoder
+        else:
+            assert self.model.desc_encoder is not None, "Description encoder not set"
+            encoder = self.model.desc_encoder
+        embeddings = encoder(**batch["tokens"])
+        return {"accessions": batch["accessions"], "embeddings": embeddings}
 
     @override
     def configure_optimizers(

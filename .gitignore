@@ -159,3 +159,4 @@ raw_data/
 wandb/
 lightning_logs/
 trained_models/
+scripts/slurm/

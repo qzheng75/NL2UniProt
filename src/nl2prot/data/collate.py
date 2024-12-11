@@ -1,11 +1,37 @@
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, Literal
 
 from nl2prot.template.module_configs import DataloaderConfig
 from torch.utils.data import DataLoader, Dataset
 from transformers import AutoTokenizer
+
+
+def tokenize(to_tokenize: list[str], tokenizer_init_args: dict[str, Any], max_len: int):
+    tokenizer = AutoTokenizer.from_pretrained(
+        cache_dir=os.environ["MODEL_CACHE"], **tokenizer_init_args
+    )
+    return tokenizer(
+        to_tokenize,
+        padding=True,
+        truncation=True,
+        max_length=max_len,
+        return_tensors="pt",
+    )
+
+
+def single_encoder_collate_fn(
+    batch: list[tuple[str, str]],
+    tokenizer_args: dict[str, Any],
+    batch_type: Literal["sequence", "description"],
+):
+    accessions, to_tokenize = zip(*batch)
+    if batch_type == "sequence":
+        tokens = tokenize(to_tokenize, tokenizer_args, max_len=1024)
+    else:
+        tokens = tokenize(to_tokenize, tokenizer_args, max_len=512)
+    return {"batch_type": batch_type, "accessions": accessions, "tokens": tokens}
 
 
 def dual_encoder_collate_fn(
@@ -13,33 +39,10 @@ def dual_encoder_collate_fn(
     seq_tokenizer_args: dict[str, Any],
     desc_tokenizer_args: dict[str, Any],
 ):
-    desc_tokenizer = AutoTokenizer.from_pretrained(
-        cache_dir=os.environ["MODEL_CACHE"], **desc_tokenizer_args
-    )
-    seq_tokenizer = AutoTokenizer.from_pretrained(
-        cache_dir=os.environ["MODEL_CACHE"], **seq_tokenizer_args
-    )
     names, sequences, descriptions_list = zip(*batch)
 
-    selected_descriptions = descriptions_list
-
-    # Tokenize sequences
-    sequence_tokens = seq_tokenizer(
-        list(sequences),
-        padding=True,
-        truncation=True,
-        max_length=1024,
-        return_tensors="pt",
-    )
-
-    # Tokenize descriptions
-    description_tokens = desc_tokenizer(
-        selected_descriptions,
-        padding=True,
-        truncation=True,
-        max_length=512,
-        return_tensors="pt",
-    )
+    sequence_tokens = tokenize(sequences, seq_tokenizer_args, max_len=1024)
+    description_tokens = tokenize(descriptions_list, desc_tokenizer_args, max_len=512)
 
     return {
         "names": names,

@@ -93,6 +93,8 @@ class FAEsmBertEncoder(BaseDualEncoder):
     @override
     def trainable_parameters(self) -> dict[str, list[nn.Parameter]]:
         """Get trainable parameters grouped by component"""
+        assert self.prot_encoder is not None, "Protein encoder not set"
+        assert self.desc_encoder is not None, "Description encoder not set"
         desc_params = [p for p in self.desc_encoder.parameters() if p.requires_grad]
         prot_params = [p for p in self.prot_encoder.parameters() if p.requires_grad]
 
@@ -110,14 +112,10 @@ class FAEsmBertEncoder(BaseDualEncoder):
         prot_emb = batch["sequences"]
         desc_emb = batch["descriptions"]
 
-        protein_features = self.prot_encoder(
-            input_ids=prot_emb["input_ids"], attention_mask=prot_emb["attention_mask"]
-        )
-        desc_features = self.desc_encoder(
-            input_ids=desc_emb["input_ids"],
-            token_type_ids=desc_emb["token_type_ids"],
-            attention_mask=desc_emb["attention_mask"],
-        )
+        assert self.prot_encoder is not None, "Protein encoder not set"
+        assert self.desc_encoder is not None, "Description encoder not set"
+        protein_features = self.prot_encoder(**prot_emb)
+        desc_features = self.desc_encoder(**desc_emb)
 
         if return_embeddings:
             return {
