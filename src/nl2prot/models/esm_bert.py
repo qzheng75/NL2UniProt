@@ -5,17 +5,14 @@ from typing import Any, override
 
 import numpy as np
 import torch
-from faesm.esm import FAEsmForMaskedLM
 from nl2prot.models.base_model import BaseDualEncoder
 from torch import Tensor, nn
-from transformers import BertModel
+from transformers import BertModel, EsmModel
 
 
 class ProjectionEncoder(nn.Module):
-    def __init__(
-        self, encoder: nn.Module, projection_dim: int, dropout: float = 0.1
-    ) -> None:
-        super(ProjectionEncoder, self).__init__()
+    def __init__(self, encoder: nn.Module, projection_dim: int, dropout: float = 0.1):
+        super().__init__()
         self.encoder = encoder
         self.projection = nn.Sequential(
             nn.Linear(encoder.config.hidden_size, projection_dim),
@@ -26,44 +23,32 @@ class ProjectionEncoder(nn.Module):
     @override
     def forward(self, **x: dict[str, Tensor]) -> Tensor:
         outputs = self.encoder(**x)
-
-        if isinstance(outputs, dict):
-            assert "last_hidden_state" in outputs
-            embeddings = outputs["last_hidden_state"][:, 0, :]
-        else:
-            embeddings = outputs.last_hidden_state[:, 0, :]  # [CLS] token
+        embeddings = outputs.last_hidden_state[:, 0, :]  # [CLS] token
         features = self.projection(embeddings)
-        return torch.nn.functional.normalize(features, dim=-1)
+        return nn.functional.normalize(features, dim=-1)
 
 
-class FAEsmBertEncoder(BaseDualEncoder):
+class EsmBertEncoder(BaseDualEncoder):
     def __init__(
         self,
         bert_model_name="bert-base-uncased",
-        esm_model_name="facebook/esm2b_t33_650M_UR50S",
+        esm_model_name="facebook/esm1b_t33_650M_UR50S",
         projection_dim=256,
         dropout=0.1,
-        num_unfrozen_bert_layers=-1,
-        num_unfrozen_esm_layers=-1,
-    ) -> None:
-        super(FAEsmBertEncoder, self).__init__()
+        num_unfrozen_bert_layers=2,
+        num_unfrozen_esm_layers=2,
+    ):
+        super(EsmBertEncoder, self).__init__()
 
-        # config = {'cache_dir': os.environ["MODEL_CACHE"]}
         bert = BertModel.from_pretrained(
-            bert_model_name,
-            attn_implementation="sdpa",
-            hidden_dropout_prob=0.2,
-            attention_probs_dropout_prob=0.2,
-            cache_dir=os.environ["MODEL_CACHE"],
+            bert_model_name, cache_dir=os.environ["MODEL_CACHE"]
         )
-        esm = FAEsmForMaskedLM.from_pretrained(
-            esm_model_name, dropout=dropout, use_fa=True
+        esm = EsmModel.from_pretrained(
+            esm_model_name, cache_dir=os.environ["MODEL_CACHE"]
         )
 
-        if num_unfrozen_bert_layers > 0:
-            self._freeze_bert_layers(bert, num_unfrozen_bert_layers)
-        if num_unfrozen_esm_layers > 0:
-            self._freeze_esm_layers(esm, num_unfrozen_esm_layers)
+        self._freeze_bert_layers(bert, num_unfrozen_bert_layers)
+        self._freeze_esm_layers(esm, num_unfrozen_esm_layers)
 
         self.desc_encoder = ProjectionEncoder(bert, projection_dim, dropout)
         self.prot_encoder = ProjectionEncoder(esm, projection_dim, dropout)
@@ -71,7 +56,7 @@ class FAEsmBertEncoder(BaseDualEncoder):
         self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
 
     @staticmethod
-    def _freeze_bert_layers(bert_model: BertModel, num_unfrozen_layers: int) -> None:
+    def _freeze_bert_layers(bert_model: nn.Module, num_unfrozen_layers: int):
         """Freeze all but the top N layers of BERT"""
         for param in bert_model.embeddings.parameters():
             param.requires_grad = False
@@ -84,25 +69,23 @@ class FAEsmBertEncoder(BaseDualEncoder):
                 param.requires_grad = False
 
     @staticmethod
-    def _freeze_esm_layers(
-        esm_model: FAEsmForMaskedLM, num_unfrozen_layers: int
-    ) -> None:
+    def _freeze_esm_layers(esm_model: nn.Module, num_unfrozen_layers: int):
         """Freeze all but the top N layers of ESM"""
-        for param in esm_model.esm.embeddings.parameters():
+        for param in esm_model.embeddings.parameters():
             param.requires_grad = False
 
-        total_layers = len(esm_model.esm.encoder.layer)
+        total_layers = len(esm_model.encoder.layer)
         layers_to_freeze = total_layers - num_unfrozen_layers
 
-        for layer in esm_model.esm.encoder.layer[:layers_to_freeze]:
+        for layer in esm_model.encoder.layer[:layers_to_freeze]:
             for param in layer.parameters():
                 param.requires_grad = False
 
     @override
-    def trainable_parameters(self) -> dict[str, list[nn.Parameter]]:
+    def trainable_parameters(self):
         """Get trainable parameters grouped by component"""
-        assert self.prot_encoder is not None, "Protein encoder not set"
         assert self.desc_encoder is not None, "Description encoder not set"
+        assert self.prot_encoder is not None, "Protein encoder not set"
         assert self.logit_scale is not None, "Model must have a logit_scale"
 
         desc_params = [p for p in self.desc_encoder.parameters() if p.requires_grad]
@@ -122,12 +105,16 @@ class FAEsmBertEncoder(BaseDualEncoder):
         prot_emb = batch["sequences"]
         desc_emb = batch["descriptions"]
 
-        assert self.prot_encoder is not None, "Protein encoder not set"
         assert self.desc_encoder is not None, "Description encoder not set"
-        assert self.logit_scale is not None, "Model must have a logit_scale"
-
-        protein_features = self.prot_encoder(**prot_emb)
-        desc_features = self.desc_encoder(**desc_emb)
+        assert self.prot_encoder is not None, "Protein encoder not set"
+        protein_features = self.prot_encoder(
+            input_ids=prot_emb["input_ids"], attention_mask=prot_emb["attention_mask"]
+        )
+        desc_features = self.desc_encoder(
+            input_ids=desc_emb["input_ids"],
+            token_type_ids=desc_emb["token_type_ids"],
+            attention_mask=desc_emb["attention_mask"],
+        )
 
         if return_embeddings:
             return {
@@ -135,6 +122,4 @@ class FAEsmBertEncoder(BaseDualEncoder):
                 "prot_embeddings": protein_features,
                 "desc_embeddings": desc_features,
             }
-        logit_scale = self.logit_scale.exp()
-        similarity = logit_scale * protein_features @ desc_features.T
-        return similarity
+        return self.compute_similarity(desc_features, protein_features, **kwargs)

@@ -3,10 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
-# @dataclass
-# class MetricConfig:
-#     metric_type: Literal["TopKAcc"]
-#     metric_args: dict[str, Any]
+
+@dataclass
+class MetricConfig:
+    metric_type: Literal["TopKAcc"]
+    metric_args: dict[str, Any]
 
 
 @dataclass

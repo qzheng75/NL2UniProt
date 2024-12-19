@@ -160,3 +160,4 @@ wandb/
 lightning_logs/
 trained_models/
 scripts/slurm/
+logs/

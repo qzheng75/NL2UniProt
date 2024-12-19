@@ -17,6 +17,7 @@ class BaseDualEncoder(BaseModel, ABC):
         super().__init__()
         self.desc_encoder: nn.Module | None = None
         self.prot_encoder: nn.Module | None = None
+        self.logit_scale: nn.Parameter | None = None
 
     @abstractmethod
     @override
@@ -24,6 +25,13 @@ class BaseDualEncoder(BaseModel, ABC):
         self, batch: Any, return_embeddings=False, **kwargs
     ) -> dict[str, Tensor] | Tensor:
         pass
+
+    def compute_similarity(
+        self, desc_emb: Tensor, prot_emb: Tensor, **kwargs
+    ) -> Tensor:
+        assert self.logit_scale is not None, "Model must have a logit_scale"
+        logit_scale = self.logit_scale.exp()
+        return logit_scale * prot_emb @ desc_emb.T
 
     @property
     def description_encoder(self) -> nn.Module:

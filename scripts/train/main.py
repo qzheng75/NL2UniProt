@@ -4,6 +4,7 @@ import argparse
 import logging
 
 import pytorch_lightning as pl
+import torch
 from dotenv import load_dotenv
 from nl2prot.template.load_module import load_everything
 from torch.utils.data import DataLoader
@@ -27,6 +28,11 @@ def main(args):
     trainer: pl.Trainer = out["trainer"]
     train_dataloader: DataLoader = out["train"]
     val_dataloader: DataLoader = out["val"]
+
+    try:
+        torch.set_float32_matmul_precision("high")
+    except AttributeError:
+        pass
 
     ckpt = out.get("checkpoint", None)
     if ckpt is not None:

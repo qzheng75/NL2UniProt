@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import warnings
 from typing import Any, Literal
 
 import pytorch_lightning as pl
@@ -10,12 +11,14 @@ from nl2prot.data.collate import get_dataloader
 from nl2prot.data.utils import split_dataset
 from nl2prot.models.base_model import BaseModel
 from nl2prot.modules import loss
+from nl2prot.modules.evaluator import Evaluator
 from nl2prot.modules.scheduler import LRScheduler
 from nl2prot.template.module_configs import (
     DataloaderConfig,
     DatasetConfig,
     LoggerConfig,
     LossConfig,
+    MetricConfig,
     ModelConfig,
     OptimizerConfig,
     SaveModelConfig,
@@ -34,10 +37,10 @@ def load_loss(config: LossConfig) -> nn.Module:
     return getattr(loss, loss_type)(**loss_args)
 
 
-# def load_evaluator(config: MetricConfig) -> Evaluator:
-#     metric_type = config.metric_type
-#     metric_args = config.metric_args
-#     return Evaluator(metric=metric_type, **metric_args)
+def load_evaluator(config: MetricConfig) -> Evaluator:
+    metric_type = config.metric_type
+    metric_args = config.metric_args
+    return Evaluator(metric=metric_type, **metric_args)
 
 
 def load_model(config: ModelConfig) -> BaseModel:
@@ -97,12 +100,12 @@ def load_dataloader(config: DataloaderConfig, dataset: Dataset) -> DataLoader:
     return get_dataloader(dataset, config)
 
 
-def load_pl_logger(config: LoggerConfig) -> loggers.Logger:
+def load_logger(config: LoggerConfig) -> loggers.Logger:
     logger_cls = getattr(loggers, config.logger_type)
     return logger_cls(**config.logger_args)
 
 
-def load_pl_model_save(config: SaveModelConfig) -> ModelCheckpoint | None:
+def load_model_save(config: SaveModelConfig) -> ModelCheckpoint | None:
     if not config.save_model:
         return None
 
@@ -118,12 +121,12 @@ def load_pl_model_save(config: SaveModelConfig) -> ModelCheckpoint | None:
 
 def load_trainer(config: TrainerConfig) -> pl.Trainer:
     if config.logger_config is not None:
-        logger = load_pl_logger(config.logger_config)
+        logger = load_logger(config.logger_config)
     else:
         logger = None
 
     if config.save_model_config is not None:
-        model_save = load_pl_model_save(config.save_model_config)
+        model_save = load_model_save(config.save_model_config)
     else:
         model_save = None
 
@@ -159,8 +162,19 @@ def load_everything(config_path: str) -> dict[str, Any]:
     optimizer_config = OptimizerConfig(**config["optimizer"])
     optimizer = load_optimizer(optimizer_config, model)
 
-    scheduler_config = SchedulerConfig(**config["scheduler"])
-    scheduler = load_scheduler(scheduler_config, optimizer)
+    if "scheduler" in config:
+        scheduler_config = SchedulerConfig(**config["scheduler"])
+        scheduler = load_scheduler(scheduler_config, optimizer)
+    else:
+        scheduler = None
+        warnings.warn("No scheduler provided in config", UserWarning)
+
+    if "evaluator" in config:
+        evaluator_config = MetricConfig(**config["evaluator"])
+        evaluator = load_evaluator(evaluator_config)
+    else:
+        evaluator = None
+        warnings.warn("No evaluator provided in config", UserWarning)
 
     dataset_config = DatasetConfig(**config["dataset"])
     datasets = load_dataset(dataset_config)
@@ -182,7 +196,11 @@ def load_everything(config_path: str) -> dict[str, Any]:
         ), "Model must be a Dual Encoder model to use DualEncoderPl"
 
         pl_module = DualEncoderPl(
-            model=model, loss_fn=loss, optimizer=optimizer, scheduler=scheduler
+            model=model,
+            loss_fn=loss,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            evaluator=evaluator,
         )
     else:
         raise ValueError(f"Unknown pl_module: {pl_module}")
@@ -191,18 +209,19 @@ def load_everything(config_path: str) -> dict[str, Any]:
         logger_config = LoggerConfig(**config["logger"])
     else:
         logger_config = None
+        warnings.warn("No logger provided in config", UserWarning)
 
     if "save_model" in config:
         save_model_config = SaveModelConfig(**config["save_model"])
     else:
         save_model_config = None
+        warnings.warn("No save_model provided in config", UserWarning)
 
     trainer_config = TrainerConfig(
         logger_config=logger_config,
         save_model_config=save_model_config,
         **config["trainer"],
     )
-
     trainer = load_trainer(trainer_config)
 
     return {

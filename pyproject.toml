@@ -25,6 +25,7 @@ dependencies = [
     "biopython",
     "wandb",
     "tensorboard",
+    "peft",
     "ruff",
     "pyright",
     "pre-commit",
