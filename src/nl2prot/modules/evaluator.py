@@ -9,6 +9,8 @@ class Evaluator:
         self.metric = metric
         if self.metric == "TopKAcc":
             self.ks = kwargs.get("ks", [10])
+            self.metrics = {f"Top{k}Acc" for k in self.ks}
+            self.metrics.add("Avg_TopKAcc")
         else:
             raise NotImplementedError(f"Metric {self.metric} not implemented yet")
 
@@ -46,4 +48,4 @@ class Evaluator:
     ) -> float:
         _, indices = self.__find_k_nearest_neighbors(desc_embedding, seq_embedding, k)
         correct = np.any(indices == ground_truth[:, np.newaxis], axis=1)
-        return np.mean(correct)
+        return np.mean(correct).item()

@@ -4,7 +4,6 @@ import importlib
 import warnings
 from typing import Any, Literal
 
-import pytorch_lightning as pl
 import yaml
 from nl2prot.data import dataset
 from nl2prot.data.collate import get_dataloader
@@ -25,8 +24,6 @@ from nl2prot.template.module_configs import (
     SchedulerConfig,
     TrainerConfig,
 )
-from pytorch_lightning import loggers
-from pytorch_lightning.callbacks import ModelCheckpoint
 from torch import nn, optim
 from torch.utils.data import DataLoader, Dataset
 
@@ -100,55 +97,6 @@ def load_dataloader(config: DataloaderConfig, dataset: Dataset) -> DataLoader:
     return get_dataloader(dataset, config)
 
 
-def load_logger(config: LoggerConfig) -> loggers.Logger:
-    logger_cls = getattr(loggers, config.logger_type)
-    return logger_cls(**config.logger_args)
-
-
-def load_model_save(config: SaveModelConfig) -> ModelCheckpoint | None:
-    if not config.save_model:
-        return None
-
-    return ModelCheckpoint(
-        dirpath=config.save_model_path,
-        filename=config.filename,
-        monitor=config.monitor,
-        mode=config.mode,
-        save_top_k=config.save_top_k,
-        every_n_epochs=config.every_n_epoch,
-    )
-
-
-def load_trainer(config: TrainerConfig) -> pl.Trainer:
-    if config.logger_config is not None:
-        logger = load_logger(config.logger_config)
-    else:
-        logger = None
-
-    if config.save_model_config is not None:
-        model_save = load_model_save(config.save_model_config)
-    else:
-        model_save = None
-
-    devices = config.devices if config.devices is not None else -1
-    callbacks = [model_save] if model_save else None
-
-    return pl.Trainer(
-        max_epochs=config.max_epochs,
-        logger=False if logger is None else logger,
-        callbacks=callbacks,  # type: ignore
-        precision=config.precision,  # type: ignore
-        log_every_n_steps=config.log_every_n_steps,
-        check_val_every_n_epoch=config.check_val_every_n_epoch,
-        accumulate_grad_batches=config.accumulate_grad_batches,
-        gradient_clip_val=config.gradient_clip_val,
-        accelerator=config.accelerator,
-        devices=devices,
-        strategy=str(config.strategy),
-        enable_progress_bar=config.enable_progress_bar,
-    )
-
-
 def load_everything(config_path: str) -> dict[str, Any]:
     with open(config_path, "r") as f:
         config = yaml.safe_load(f)
@@ -186,47 +134,43 @@ def load_everything(config_path: str) -> dict[str, Any]:
         k: load_dataloader(v, datasets[k]) for k, v in dataloader_configs.items()
     }
 
-    pl_module = config["pl_module"]
-    if pl_module == "DualEncoder":
-        from nl2prot.models.base_model import BaseDualEncoder
-        from nl2prot.trainer.dual_encoder_pl import DualEncoderPl
-
-        assert isinstance(
-            model, BaseDualEncoder
-        ), "Model must be a Dual Encoder model to use DualEncoderPl"
-
-        pl_module = DualEncoderPl(
-            model=model,
-            loss_fn=loss,
-            optimizer=optimizer,
-            scheduler=scheduler,
-            evaluator=evaluator,
-        )
-    else:
-        raise ValueError(f"Unknown pl_module: {pl_module}")
-
     if "logger" in config:
         logger_config = LoggerConfig(**config["logger"])
     else:
-        logger_config = None
-        warnings.warn("No logger provided in config", UserWarning)
+        logger_config = LoggerConfig(logger_type="stdout", logger_args={})
+        warnings.warn("No logger provided in config. Default to stdout.", UserWarning)
 
     if "save_model" in config:
         save_model_config = SaveModelConfig(**config["save_model"])
     else:
-        save_model_config = None
-        warnings.warn("No save_model provided in config", UserWarning)
+        save_model_config = SaveModelConfig(save_model=False)
+        warnings.warn(
+            "No save_model provided in config.\
+            Default not to save model.",
+            UserWarning,
+        )
 
+    trainer_type = config["trainer"]["trainer_type"]
     trainer_config = TrainerConfig(
         logger_config=logger_config,
         save_model_config=save_model_config,
-        **config["trainer"],
+        **config["trainer"]["trainer_args"],
     )
-    trainer = load_trainer(trainer_config)
+    module_name, class_name = trainer_type.rsplit(".", 1)
+    module = importlib.import_module(f"nl2prot.trainer.{module_name}")
+    trainer_cls = getattr(module, class_name)
+    trainer = trainer_cls(
+        model=model,
+        optimizer=optimizer,
+        loss=loss,
+        trainer_config=trainer_config,
+        evaluator=evaluator,
+        save_model_config=save_model_config,
+        logger_config=logger_config,
+        lr_scheduler=scheduler,
+    )
 
     return {
-        "pl_module": pl_module,
-        "checkpoint": trainer_config.resume_from_checkpoint,
         "trainer": trainer,
         **dataloaders,
     }
