@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from collections import defaultdict
 
 import numpy as np
@@ -24,12 +25,6 @@ ID_TRANSFORMS = defaultdict(
 def parse_args():
     parser = argparse.ArgumentParser(description="Compute top-k")
     parser.add_argument(
-        "--seq-embedding-file",
-        type=str,
-        required=True,
-        help="Path to the sequence embedding file",
-    )
-    parser.add_argument(
         "--description-file",
         type=str,
         required=True,
@@ -45,7 +40,7 @@ def parse_args():
         help="Path to the module config file",
     )
     parser.add_argument(
-        "--model-ckpt-path",
+        "--model-ckpt-dir",
         type=str,
         required=True,
         help="Path to the model checkpoint file",
@@ -54,12 +49,11 @@ def parse_args():
         "--tokenizer-args",
         type=json.loads,
         help="Arguments for the tokenizer",
-        default='{"pretrained_model_name_or_path": "facebook/esm2_t12_35M_UR50D"}',
+        default='{"pretrained_model_name_or_path": "prajjwal1/bert-small"}',
     )
     parser.add_argument(
         "--id-transform", type=str, default="|", help="Delimiter to split the ID"
     )
-
     return parser.parse_args()
 
 
@@ -76,9 +70,13 @@ def main(args):
         names.append(ID_TRANSFORMS[args.id_transform](entry["id"]))
         desc.append(entry["description"])
 
+    model_ckpt_path = os.path.join(args.model_ckpt_dir, "best_state.pt")
+    if not os.path.exists(model_ckpt_path):
+        raise FileNotFoundError(f"Model checkpoint file not found: {model_ckpt_path}")
+
     accessions, embeddings = embed_descriptions(
         module_config_path=args.module_config_path,
-        model_ckpt_path=args.model_ckpt_path,
+        model_ckpt_path=model_ckpt_path,
         tokenizer_args=args.tokenizer_args,
         descriptions=desc,
         accessions=names,
@@ -87,7 +85,14 @@ def main(args):
         accessions is not None
     ), "Accessions should be provided in json. Report this issue."
 
-    adata = read(args.seq_embedding_file)
+    seq_embedding_file = os.path.join(args.model_ckpt_dir, "seq_embed.h5ad")
+    if not os.path.exists(seq_embedding_file):
+        raise FileNotFoundError(
+            f"Sequence embedding file not found: {seq_embedding_file}."
+            + " Please run compute_seq_embedding.py first."
+        )
+
+    adata = read(seq_embedding_file)
     assert isinstance(adata.X, np.ndarray), "Sequence embedding must be a numpy array"
     ac2idx = {adata.obs["accession"].iloc[i]: i for i in range(len(adata))}
 

@@ -64,6 +64,7 @@ class BaseTrainer(ABC):
             if device is not None
             else ("cuda" if torch.cuda.is_available() else "cpu")
         )
+        logging.info(f"Using {self.device} as device.")
         self.model = self.model.to(self.device)
 
         self.grad_scaler = GradScaler(

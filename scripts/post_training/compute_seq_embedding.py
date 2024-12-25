@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 
 from dotenv import load_dotenv
 from nl2prot.validate.embedding import embed_sequences
@@ -18,7 +19,7 @@ def parse_args():
         help="Path to the module config file",
     )
     parser.add_argument(
-        "--model-ckpt-path",
+        "--model-ckpt-dir",
         type=str,
         required=True,
         help="Path to the model checkpoint file",
@@ -38,19 +39,25 @@ def parse_args():
     parser.add_argument(
         "--accessions", nargs="+", type=str, help="List of accessions for raw sequences"
     )
-    parser.add_argument("--output-file", type=str, help="Path to the output file")
     return parser.parse_args()
 
 
 def main(args):
+    model_ckpt_dir = args.model_ckpt_dir
+    model_ckpt_path = os.path.join(model_ckpt_dir, "best_state.pt")
+    output_file = os.path.join(model_ckpt_dir, "seq_embed.h5ad")
+
+    if not os.path.exists(model_ckpt_path):
+        raise FileNotFoundError(f"Model checkpoint file not found: {model_ckpt_path}")
+
     _, embeddings = embed_sequences(
-        args.module_config_path,
+        model_ckpt_path,
         args.model_ckpt_path,
         args.tokenizer_args,
         args.fasta_file,
         args.raw_sequences,
         args.accessions,
-        args.output_file,
+        output_file,
     )
     print(f"Finished embedding {len(embeddings)} sequences")
 

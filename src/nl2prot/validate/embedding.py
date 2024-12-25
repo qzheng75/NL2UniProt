@@ -53,8 +53,7 @@ def compute_embeddings(
 
 
 def get_trainer(
-    module_config_path: str,
-    model_ckpt_path: str,
+    module_config_path: str, model_ckpt_path: str, quantize_model: bool = False
 ) -> BaseTrainer:
     assert (
         module_config_path is not None and model_ckpt_path is not None
@@ -66,6 +65,13 @@ def get_trainer(
         trainer.resume_from_checkpoint(model_ckpt_path)
     else:
         raise NotImplementedError("Only CLIPTrainer is supported for now")
+
+    if quantize_model:
+        from torch.quantization import quantize_dynamic
+
+        trainer.model = quantize_dynamic(
+            trainer.model, {torch.nn.Linear}, dtype=torch.qint8
+        )
 
     return trainer
 

@@ -104,7 +104,10 @@ def load_everything(config_path: str) -> dict[str, Any]:
     loss_config = LossConfig(**config["loss"])
     loss = load_loss(loss_config)
 
-    model_config = ModelConfig(**config["model"])
+    model_config = ModelConfig(
+        model_type=config["model"]["model_type"],
+        model_args=config["model"]["model_args"],
+    )
     model = load_model(model_config)
 
     optimizer_config = OptimizerConfig(**config["optimizer"])
