@@ -12,6 +12,7 @@ authors = [
 readme = "README.rst"
 requires-python = ">=3.12"  # Adjust based on your minimum Python version requirement
 dependencies = [
+    "prettytable",
     "pyyaml",
     "tqdm",
     "numpy",

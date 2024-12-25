@@ -78,6 +78,7 @@ class TrainerConfig:
     resume_from_checkpoint: str | None = None
     use_amp: bool = False
     gradient_clip_val: float = 0.0
+    log_every_n_steps: int = 50
     devices: list[int] | None = None
     strategy: Literal["ddp", "auto"] = "auto"
     enable_progress_bar: bool = True

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any, override
+from typing import Any, Literal, override
 
 import numpy as np
 import torch
@@ -31,12 +31,13 @@ class ProjectionEncoder(nn.Module):
 class EsmBertEncoder(BaseDualEncoder):
     def __init__(
         self,
-        bert_model_name="bert-base-uncased",
-        esm_model_name="facebook/esm1b_t33_650M_UR50S",
-        projection_dim=256,
-        dropout=0.1,
-        num_unfrozen_bert_layers=2,
-        num_unfrozen_esm_layers=2,
+        bert_model_name: str = "bert-base-uncased",
+        esm_model_name: str = "facebook/esm1b_t33_650M_UR50S",
+        projection_dim: int = 256,
+        dropout: float = 0.1,
+        num_unfrozen_bert_layers: int = 2,
+        num_unfrozen_esm_layers: int = 2,
+        init_method: Literal["normal", "xavier"] = "normal",
     ):
         super(EsmBertEncoder, self).__init__()
 
@@ -55,9 +56,17 @@ class EsmBertEncoder(BaseDualEncoder):
 
         self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
 
+        if init_method == "xavier":
+            for name, param in self.named_parameters():
+                if param.requires_grad:
+                    if "weight" in name and param.ndimension() >= 2:
+                        nn.init.xavier_normal_(param)
+                    elif "bias" in name:
+                        nn.init.zeros_(param)
+
     @staticmethod
     def _freeze_bert_layers(bert_model: nn.Module, num_unfrozen_layers: int):
-        """Freeze all but the top N layers of BERT"""
+        """Freeze all but the bottom N layers of BERT"""
         for param in bert_model.embeddings.parameters():
             param.requires_grad = False
 
@@ -70,7 +79,7 @@ class EsmBertEncoder(BaseDualEncoder):
 
     @staticmethod
     def _freeze_esm_layers(esm_model: nn.Module, num_unfrozen_layers: int):
-        """Freeze all but the top N layers of ESM"""
+        """Freeze all but the bottom N layers of ESM"""
         for param in esm_model.embeddings.parameters():
             param.requires_grad = False
 

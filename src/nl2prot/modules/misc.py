@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import warnings
+from typing import Any
 
 from nl2prot.template.module_configs import LoggerConfig
 from torch.utils.tensorboard import SummaryWriter
@@ -37,8 +38,7 @@ class Logger:
 
     def log(
         self,
-        metric: float | None,
-        metric_name: str | None,
+        metrics: dict[str, Any] | None,
         step: int,
         commit: bool = False,
     ):
@@ -46,17 +46,15 @@ class Logger:
             # TODO: Implement tensorboard logging
             raise NotImplementedError("Tensorboard logging not implemented")
         elif self.logger_config.logger_type == "wandb":
-            assert (metric is None and metric_name is None) or (
-                metric is not None and metric_name is not None
-            )
-            if metric is None and commit:
+            if metrics is None and commit:
                 wandb.log(data={}, step=step, commit=True)
             else:
-                assert metric is not None and metric_name is not None
-                wandb.log(data={metric_name: metric}, step=step, commit=commit)
+                assert metrics is not None
+                wandb.log(data=metrics, step=step, commit=commit)
         elif self.logger_config.logger_type == "stdout":
-            if metric is None or metric_name is None:
+            if metrics is None:
                 return
-            logging.info(f"Step: {step} | {metric_name}: {metric}")
+            for metric_name, metric in metrics.items():
+                logging.info(f"Step: {step} | {metric_name}: {metric}")
         else:
             raise ValueError(f"Invalid logger type: {self.logger_config.logger_type}")

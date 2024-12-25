@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import logging
 import os
+import warnings
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any
 
 import torch
-from nl2prot.models.base_model import BaseModel
+from nl2prot.models.base_model import BaseModel, print_model_parameters
 from nl2prot.modules.evaluator import Evaluator
 from nl2prot.modules.misc import Logger
 from nl2prot.modules.scheduler import LRScheduler
@@ -33,6 +34,7 @@ class BaseTrainer(ABC):
         device: str | None = None,
     ):
         self.model = model
+        print_model_parameters(model)
         self.optimizer = optimizer
         self.loss = loss
         self.save_model_config = save_model_config
@@ -45,6 +47,7 @@ class BaseTrainer(ABC):
         )
 
         self.logger_config = logger_config
+        self.log_per = trainer_config.log_every_n_steps
         self.logger = Logger(logger_config)
 
         self.evaluator = evaluator
@@ -52,6 +55,8 @@ class BaseTrainer(ABC):
 
         self.metrics: dict[str, list[float]] = {}
         self.init_metrics()
+
+        self.global_training_step = 0
 
         self.lr_scheduler = lr_scheduler
         self.device = (
@@ -65,7 +70,7 @@ class BaseTrainer(ABC):
             enabled=trainer_config.use_amp and torch.cuda.is_available()
         )
         self.curr_epoch = 0
-        self.resume_from_checkpoint()
+        self.resume_from_checkpoint(self.trainer_config.resume_from_checkpoint)
         self.epochs_to_train = trainer_config.max_epochs - self.curr_epoch
 
     def save_state(self) -> None:
@@ -81,6 +86,7 @@ class BaseTrainer(ABC):
             "optimizer": self.optimizer.state_dict(),
             "metrics": self.metrics,
             "best_metric": self.best_metric,
+            "global_training_step": self.global_training_step,
         }
         if self.lr_scheduler is not None:
             state["scheduler"] = self.lr_scheduler.state_dict()
@@ -109,22 +115,29 @@ class BaseTrainer(ABC):
         save_path = os.path.join(self.save_dir, "best_state.pt")
         torch.save(state, save_path)
 
-    def resume_from_checkpoint(self):
-        if self.trainer_config.resume_from_checkpoint is None:
+    def resume_from_checkpoint(self, checkpoint_path: str | None = None) -> None:
+        if checkpoint_path is None:
             return
 
-        checkpoint = torch.load(
-            self.trainer_config.resume_from_checkpoint, map_location=self.device
-        )
+        checkpoint = torch.load(checkpoint_path, map_location=self.device)
         self.curr_epoch = checkpoint["epoch"] + 1
         self.model.load_state_dict(checkpoint["model"])
         self.optimizer.load_state_dict(checkpoint["optimizer"])
         self.metrics = checkpoint["metrics"]
         self.best_metric = checkpoint["best_metric"]
 
+        try:
+            self.global_training_step = checkpoint["global_training_step"]
+        except KeyError:
+            self.global_training_step = 0
+            warnings.warn(
+                "Global training step not found in checkpoint. "
+                + "Maybe you're using an older version of this codebase. "
+                + "Report this issue if you're using the latest version."
+            )
+
         if self.lr_scheduler is not None:
             self.lr_scheduler.load_state_dict(checkpoint["scheduler"])
-        logging.info(f"Resuming training from epoch {self.curr_epoch}")
 
     @abstractmethod
     def init_metrics(self) -> None:
@@ -148,6 +161,10 @@ class BaseTrainer(ABC):
         pass
 
     def after_val_epoch(self) -> None:
+        pass
+
+    @abstractmethod
+    def predict_step(self, batch, batch_idx, **kwargs) -> Any:
         pass
 
     def __backward(self, loss: Tensor) -> float:
@@ -192,15 +209,24 @@ class BaseTrainer(ABC):
     def __scheduler_step(self, val_metric: float) -> None:
         if self.lr_scheduler is not None:
             if self.lr_scheduler.scheduler_type == "ReduceLROnPlateau":
-                self.lr_scheduler.step(epoch=self.curr_epoch, metrics=val_metric)
+                self.lr_scheduler.step(
+                    epoch=self.global_training_step, metrics=val_metric
+                )
             else:
-                self.lr_scheduler.step(epoch=self.curr_epoch)
+                self.lr_scheduler.step(epoch=self.global_training_step)
 
     def train(self, train_loader: DataLoader, val_loader: DataLoader) -> None:
-        logging.info(
-            f"Starting training {self.epochs_to_train}\
-            epochs with {self.model.__class__.__name__} model."
-        )
+        if self.global_training_step != 0:
+            logging.info(
+                f"Already training {self.global_training_step} steps. "
+                + f"Resuming training from epoch {self.epochs_to_train} "
+                + f"epochs with {self.model.__class__.__name__} model."
+            )
+        else:
+            logging.info(
+                f"Starting training {self.epochs_to_train} "
+                + f"epochs with {self.model.__class__.__name__} model."
+            )
 
         while self.curr_epoch < self.trainer_config.max_epochs:
             self.model.train()
@@ -210,6 +236,9 @@ class BaseTrainer(ABC):
             pbar = tqdm(
                 train_loader, disable=not self.trainer_config.enable_progress_bar
             )
+
+            accumulate_train_loss = 0.0
+            accumulate_grad_norm = 0.0
             for batch_idx, batch in enumerate(pbar):
                 batch = self.__batch_to_device(batch)
 
@@ -221,24 +250,42 @@ class BaseTrainer(ABC):
 
                 grad_norm = self.__backward(loss)
                 pbar.set_description(
-                    f"Batch {batch_idx} | Loss: {loss.item():.4f}\
-                    | Grad Norm: {grad_norm:.4f}"
+                    f"Batch {batch_idx} | Loss: {loss.item():.4f}"
+                    + f", Grad Norm: {grad_norm:.4f}"
                 )
                 epoch_train_total_loss += loss.item()
+                accumulate_train_loss += loss.item()
+                accumulate_grad_norm += grad_norm
+
+                if (self.global_training_step + 1) % self.log_per == 0:
+                    step_loss = accumulate_train_loss / self.log_per
+                    step_grad_norm = accumulate_grad_norm / self.log_per
+                    self.logger.log(
+                        {
+                            "train/step_loss": step_loss,
+                            "train/step_grad_norm": step_grad_norm,
+                        },
+                        self.global_training_step,
+                    )
+                    accumulate_train_loss, accumulate_grad_norm = 0.0, 0.0
+
+                    if batch_idx != len(train_loader) - 1:
+                        # Flush logs
+                        self.logger.log(None, self.global_training_step, True)
+
+                self.global_training_step += 1
 
             self.after_train_epoch()
             epoch_loss = epoch_train_total_loss / len(train_loader)
-            self.logger.log(epoch_loss, "train/loss", self.curr_epoch, commit=False)
 
-            self.metrics["train/loss"].append(epoch_loss)
+            # Final training log, flush
+            self.logger.log({"train/epoch_loss": epoch_loss}, self.global_training_step)
+            self.metrics["train/epoch_loss"].append(epoch_loss)
 
             if val_loader is not None:
                 self.validate(val_loader)
                 monitor_metric = self.metrics[self.save_model_config.monitor][-1]
                 self.__scheduler_step(monitor_metric)
-
-            # Flush all logs
-            self.logger.log(None, None, self.curr_epoch, True)
 
             self.save_state()
             self.curr_epoch += 1
@@ -249,6 +296,7 @@ class BaseTrainer(ABC):
         self.before_val_epoch()
 
         epoch_val_total_loss = 0.0
+
         pbar = tqdm(loader, disable=not self.trainer_config.enable_progress_bar)
         for batch_idx, batch in enumerate(pbar):
             batch = self.__batch_to_device(batch)
@@ -263,7 +311,9 @@ class BaseTrainer(ABC):
 
         self.after_val_epoch()
         val_loss = epoch_val_total_loss / len(loader)
-        self.logger.log(val_loss, "val/epoch_loss", self.curr_epoch, commit=False)
 
-        if "val/loss" in self.metrics:
-            self.metrics["val/loss"].append(val_loss)
+        # Final log, flush
+        self.logger.log(
+            {"val/epoch_loss": val_loss}, self.global_training_step, commit=True
+        )
+        self.metrics["val/epoch_loss"].append(val_loss)

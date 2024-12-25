@@ -9,6 +9,7 @@ model:
     esm_model_name: facebook/esm2_t12_35M_UR50D
     num_unfrozen_bert_layers: 4
     num_unfrozen_esm_layers: 4
+    init_method: xavier
 
 optimizer:
   optimizer_type: Adam
@@ -58,30 +59,27 @@ evaluator:
     ks: [10, 20, 50]
 
 logger:
-  logger_type: wandb
-  logger_args:
-    project: NL2UniProt
-    name: ESM25M-SmallBERT-4layer-training-bf16
+  logger_type: stdout
+  logger_args: {}
+    # project: NL2UniProt
+    # name: Xavier-ESM25M-SmallBERT-3layer-training
     # offline: False
 
 save_model:
   save_model: True
-  mode: max
-  monitor: val/Avg_TopKAcc
-  save_model_dir: trained_models #esm25m_4layer_smallbert
-  identifier: esm25m_4layer_smallbert
+  mode: min
+  monitor: val/epoch_loss
+  save_model_dir: trained_models/esm_bert #esm25m_4layer_smallbert
+  identifier: xavier_esm25m_3layer_smallbert
 
 trainer:
   trainer_type: clip_trainer.CLIPTrainer
   trainer_args:
     max_epochs: 50
     devices: [0]
-    enable_progress_bar: True
+    enable_progress_bar: False
     use_amp: True
-    # resume_from_checkpoint: trained_models/2024-12-22-02-32-37-test/state.pt
+    # resume_from_checkpoint: trained_models/2024-12-23-03-14-25-test/state.pt
     # precision: 32
     # strategy: ddp
     # resume_from_checkpoint: None
-
-
-pl_module: DualEncoder

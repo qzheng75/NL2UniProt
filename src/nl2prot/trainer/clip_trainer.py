@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import warnings
-from typing import override
+from typing import Any, override
 
 import numpy as np
+import torch
 from nl2prot.models.base_model import BaseDualEncoder, BaseModel
 from nl2prot.modules.evaluator import Evaluator
 from nl2prot.modules.scheduler import LRScheduler
 from nl2prot.template.module_configs import LoggerConfig, SaveModelConfig, TrainerConfig
 from nl2prot.trainer.base_trainer import BaseTrainer
 from torch import nn
+from torch.amp import autocast
 from torch.optim import Optimizer
 
 
@@ -52,8 +54,8 @@ class CLIPTrainer(BaseTrainer):
         if self.evaluator is not None:
             for metric in self.evaluator.metrics:
                 self.metrics[f"val/{metric}"] = []
-        self.metrics["train/loss"] = []
-        self.metrics["val/loss"] = []
+        self.metrics["train/epoch_loss"] = []
+        self.metrics["val/epoch_loss"] = []
 
     @override
     def training_step(self, batch, batch_idx):
@@ -93,14 +95,17 @@ class CLIPTrainer(BaseTrainer):
 
     @override
     def after_train_epoch(self):
+        lrs = {}
         for param_group in self.optimizer.param_groups:
-            self.logger.log(
-                param_group["lr"],
-                f'train/lr_{param_group["name"]}',
-                self.curr_epoch,
-                commit=False,
-            )
-        self.logger.log(self.curr_epoch, "epoch", self.curr_epoch, commit=False)
+            lrs[f'train/lr_{param_group["name"]}'] = param_group["lr"]
+        self.logger.log(
+            lrs,
+            self.global_training_step,
+            commit=False,
+        )
+        self.logger.log(
+            {"epoch": self.curr_epoch}, self.global_training_step, commit=False
+        )
 
     @override
     def validation_step(self, batch, batch_idx):
@@ -145,7 +150,38 @@ class CLIPTrainer(BaseTrainer):
         ground_truth = np.array(self.ground_truth)
         seq_embs = np.array(self.seq_embs)
         results = self.evaluator.evaluate(desc_embs, seq_embs, ground_truth)
+
+        metrics = {}
         for key, value in results.items():
             key = f"val/{key}"
             self.metrics[key].append(value)
-            self.logger.log(value, key, self.curr_epoch, commit=False)
+            metrics[key] = value
+
+        self.logger.log(metrics, self.global_training_step, commit=False)
+
+    @override
+    @torch.no_grad()
+    def predict_step(self, batch, batch_idx, **kwargs) -> Any:
+        assert isinstance(
+            self.model, BaseDualEncoder
+        ), "Model must be a dual encoder model"
+        assert isinstance(batch, dict), "Batch must be a dictionary"
+        assert "batch_type" in batch.keys(), "batch_type must be present in batch"
+        assert "tokens" in batch.keys(), "tokens must be present in batch"
+
+        self.model.eval()
+        self.model = self.model.to(self.device)
+        batch_type = batch["batch_type"]
+
+        if batch_type == "sequence":
+            assert self.model.prot_encoder is not None, "Protein encoder not set"
+            encoder = self.model.prot_encoder
+        else:
+            assert self.model.desc_encoder is not None, "Description encoder not set"
+            encoder = self.model.desc_encoder
+        with autocast(
+            enabled=self.trainer_config.use_amp and torch.cuda.is_available(),
+            device_type=self.device,
+        ):
+            embeddings = encoder(**batch["tokens"])
+        return {"accessions": batch["accessions"], "embeddings": embeddings}
