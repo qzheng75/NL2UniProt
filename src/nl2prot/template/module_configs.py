@@ -53,32 +53,32 @@ class DataloaderConfig:
 @dataclass
 class SaveModelConfig:
     save_model: bool
-    save_model_path: str = "trained_models/"
-    filename: str = "model-{epoch:02d}"
-    mode: str = "max"
+    mode: str = "min"
     monitor: str = "val/loss"
+    save_model_dir: str = "trained_models/"
+    identifier: str = "test"
+    filename: str = "model-{epoch:02d}"
     save_top_k: int = 1
     every_n_epoch: int = 1
 
 
 @dataclass
 class LoggerConfig:
-    logger_type: Literal["TensorBoardLogger", "WandbLogger"]
+    logger_type: Literal["tensorboard", "wandb", "stdout"]
     logger_args: dict[str, Any]
+    # monitor: list[Literal['train/loss', 'val/loss', 'val/evaluator',\
+    #     'train/grad_norm', 'train/epoch_loss', 'val/epoch_loss']]
 
 
 @dataclass
 class TrainerConfig:
     max_epochs: int
+    logger_config: LoggerConfig
+    save_model_config: SaveModelConfig
     resume_from_checkpoint: str | None = None
-    save_model_config: SaveModelConfig | None = None
-    logger_config: LoggerConfig | None = None
-    precision: str = "bf16-mixed"
-    log_every_n_steps: int = 50
-    check_val_every_n_epoch: int = 1
-    accumulate_grad_batches: int = 1
+    use_amp: bool = False
     gradient_clip_val: float = 0.0
-    accelerator: Literal["gpu", "auto"] = "auto"
+    log_every_n_steps: int = 50
     devices: list[int] | None = None
     strategy: Literal["ddp", "auto"] = "auto"
     enable_progress_bar: bool = True

@@ -3,26 +3,25 @@ from __future__ import annotations
 from typing import Any, Literal
 
 import numpy as np
-import pytorch_lightning as pl
 import scanpy as sc
 import torch
 from Bio import SeqIO
 from nl2prot.data.collate import single_encoder_collate_fn
 from nl2prot.data.dataset import DescDataset, ProtDataset
 from nl2prot.template.load_module import load_everything
-from nl2prot.trainer.dual_encoder_pl import DualEncoderPl
+from nl2prot.trainer.base_trainer import BaseTrainer
+from nl2prot.trainer.clip_trainer import CLIPTrainer
 from tqdm import tqdm
 
 
 def compute_embeddings(
-    pl_module: pl.LightningModule,
+    trainer: BaseTrainer,
     tokenizer_args: dict[str, Any],
     input_type: Literal["sequence", "description"],
     to_embed: list[str],
     accessions: list[str] | None = None,
     batch_size: int = 16,
     device: str = "cuda",
-    precision: Literal["16", "32", "bfloat16"] = "bfloat16",
     enable_progress_bar: bool = True,
 ) -> tuple[list[str] | None, np.ndarray]:
     if input_type == "sequence":
@@ -43,41 +42,32 @@ def compute_embeddings(
         dataset, batch_size=batch_size, collate_fn=collate_fn, shuffle=False
     )
 
-    dtype_dict = {"16": torch.float16, "32": torch.float32, "bfloat16": torch.bfloat16}
-
-    pl_module.eval()
-    with torch.autocast(device_type="cuda", dtype=dtype_dict[precision]):
-        with torch.no_grad():
-            embeddings = []
-            for idx, batch in enumerate(
-                tqdm(dataloader, disable=not enable_progress_bar)
-            ):
-                batch["tokens"] = {k: v.to(device) for k, v in batch["tokens"].items()}
-                out = pl_module.predict_step(batch, idx)
-                embeddings.append(out["embeddings"].float().cpu().numpy())
+    embeddings = []
+    for idx, batch in enumerate(tqdm(dataloader, disable=not enable_progress_bar)):
+        batch["tokens"] = {k: v.to(device) for k, v in batch["tokens"].items()}
+        out = trainer.predict_step(batch, idx)
+        embeddings.append(out["embeddings"].float().cpu().numpy())
 
     embeddings = np.concatenate(embeddings, axis=0)
     return accessions, embeddings
 
 
-def get_pl_module(
+def get_trainer(
     module_config_path: str,
     model_ckpt_path: str,
-) -> pl.LightningModule:
+) -> BaseTrainer:
     assert (
         module_config_path is not None and model_ckpt_path is not None
     ), "You must provide a module config and a model checkpoint"
     all_modules = load_everything(module_config_path)
-    pl_module: pl.LightningModule = all_modules["pl_module"]
+    trainer: BaseTrainer = all_modules["trainer"]
 
-    if isinstance(pl_module, DualEncoderPl):
-        pl_module = DualEncoderPl.load_from_checkpoint(
-            model_ckpt_path, model=pl_module.model, loss_fn=pl_module.loss_fn
-        )
+    if isinstance(trainer, CLIPTrainer):
+        trainer.resume_from_checkpoint(model_ckpt_path)
     else:
-        raise NotImplementedError("Only DualEncoderPl is supported for now")
+        raise NotImplementedError("Only CLIPTrainer is supported for now")
 
-    return pl_module
+    return trainer
 
 
 def embed_sequences(
@@ -95,7 +85,7 @@ def embed_sequences(
         ".h5ad"
     ), "Temporary output only supports h5ad format"
 
-    pl_module = get_pl_module(module_config_path, model_ckpt_path)
+    trainer = get_trainer(module_config_path, model_ckpt_path)
     if raw_sequences is None:
         assert (
             fasta_file is not None
@@ -107,14 +97,14 @@ def embed_sequences(
                 names.append(str(record.id))
                 seqs.append(str(record.seq))
         acc, embeddings = compute_embeddings(
-            pl_module, tokenizer_args, "sequence", seqs, names, **kwargs
+            trainer, tokenizer_args, "sequence", seqs, names, **kwargs
         )
     else:
         assert (
             accessions is not None
         ), "You must provide accessions for raw sequences input type"
         acc, embeddings = compute_embeddings(
-            pl_module, tokenizer_args, "sequence", raw_sequences, accessions, **kwargs
+            trainer, tokenizer_args, "sequence", raw_sequences, accessions, **kwargs
         )
 
     assert acc is not None, "Accessions must be returned. Report this issue."
@@ -136,9 +126,9 @@ def embed_descriptions(
 ) -> tuple[list[str] | None, np.ndarray]:
     assert tokenizer_args is not None, "You must provide tokenizer arguments"
 
-    pl_module = get_pl_module(module_config_path, model_ckpt_path)
+    trainer = get_trainer(module_config_path, model_ckpt_path)
     acc, embeddings = compute_embeddings(
-        pl_module, tokenizer_args, "description", descriptions, accessions, **kwargs
+        trainer, tokenizer_args, "description", descriptions, accessions, **kwargs
     )
 
     return acc, embeddings

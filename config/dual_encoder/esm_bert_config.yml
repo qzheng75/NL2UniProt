@@ -9,6 +9,7 @@ model:
     esm_model_name: facebook/esm2_t12_35M_UR50D
     num_unfrozen_bert_layers: 4
     num_unfrozen_esm_layers: 4
+    init_method: xavier
 
 optimizer:
   optimizer_type: Adam
@@ -35,11 +36,11 @@ dataset:
     train:
       adata_path: raw_data/adata/human_adata.h5ad
       desc_path: raw_data/descriptions/train_desc.json
-      use_ratio: 1.
+      use_ratio: 1.0
     val:
       adata_path: raw_data/adata/human_adata.h5ad
       desc_path: raw_data/descriptions/val_desc.json
-      use_ratio: 1.
+      use_ratio: 1.0
 
 dataloader:
   batch_size: 64
@@ -58,27 +59,27 @@ evaluator:
     ks: [10, 20, 50]
 
 logger:
-  logger_type: WandbLogger
-  logger_args:
-    project: NL2UniProt
-    name: ESM25M-SmallBERT-4layer-training-bf16
-    offline: False
+  logger_type: stdout
+  logger_args: {}
+    # project: NL2UniProt
+    # name: Xavier-ESM25M-SmallBERT-3layer-training
+    # offline: False
 
 save_model:
   save_model: True
-  mode: max
-  monitor: val/Avg_TopKAcc
-  save_model_path: trained_models/esm25m_4layer_smallbert_bf16
+  mode: min
+  monitor: val/epoch_loss
+  save_model_dir: trained_models/esm_bert #esm25m_4layer_smallbert
+  identifier: xavier_esm25m_3layer_smallbert
 
 trainer:
-  max_epochs: 50
-  devices: [0]
-  enable_progress_bar: False
-  precision: bf16-mixed
-  # resume_from_checkpoint: trained_models/esm150m_smallbert_fae/model-epoch=00.ckpt
-  # precision: 32
-  # strategy: ddp
-  # resume_from_checkpoint: None
-
-
-pl_module: DualEncoder
+  trainer_type: clip_trainer.CLIPTrainer
+  trainer_args:
+    max_epochs: 50
+    devices: [0]
+    enable_progress_bar: False
+    use_amp: True
+    # resume_from_checkpoint: trained_models/2024-12-23-03-14-25-test/state.pt
+    # precision: 32
+    # strategy: ddp
+    # resume_from_checkpoint: None

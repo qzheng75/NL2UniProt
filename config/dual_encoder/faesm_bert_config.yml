@@ -3,22 +3,22 @@ loss:
   loss_args: {}
 
 model:
-  model_type: lora_wrap.LoRAWrapper
+  model_type: faesm_bert.FAEsmBertEncoder
   model_args:
-    base_model_name: faesm_bert.FAEsmBertEncoder
-    base_model_args:
-      bert_model_name: prajjwal1/bert-small
-      esm_model_name: facebook/esm2_t12_35M_UR50D
+    bert_model_name: prajjwal1/bert-small
+    esm_model_name: facebook/esm2_t12_35M_UR50D
+    num_unfrozen_bert_layers: 4
+    num_unfrozen_esm_layers: 4
 
 optimizer:
   optimizer_type: Adam
   optimizer_args:
     desc:
-      lr: 0.05
+      lr: 0.00005
     prot:
-      lr: 0.05
+      lr: 0.00005
     other:
-      lr: 0.01
+      lr: 0.001
 
 scheduler:
   scheduler_type: ReduceLROnPlateau
@@ -35,14 +35,14 @@ dataset:
     train:
       adata_path: raw_data/adata/human_adata.h5ad
       desc_path: raw_data/descriptions/train_desc.json
-      use_ratio: 1.
+      use_ratio: 1.0
     val:
       adata_path: raw_data/adata/human_adata.h5ad
       desc_path: raw_data/descriptions/val_desc.json
-      use_ratio: 1.
+      use_ratio: 1.0
 
 dataloader:
-  batch_size: 16
+  batch_size: 128
   collate_fn: dual_encoder_collate_fn
   collate_args:
     seq_tokenizer_args:
@@ -57,28 +57,28 @@ evaluator:
   metric_args:
     ks: [10, 20, 50]
 
-# logger:
-#   logger_type: WandbLogger
-#   logger_args:
-#     project: NL2UniProt
-#     name: FAESM25M-SmallBERT-lora-training
-#     offline: False
+logger:
+  logger_type: stdout
+  logger_args: {}
+    # project: NL2UniProt
+    # name: ESM25M-SmallBERT-4layer-training-bf16
+    # offline: False
 
-# save_model:
-#   save_model: True
-#   mode: max
-#   monitor: val/Avg_TopKAcc
-#   save_model_path: trained_models/faesm25m_smallbert_lora
+save_model:
+  save_model: True
+  mode: min
+  monitor: val/loss
+  save_model_dir: trained_models/faesm_bert #esm25m_4layer_smallbert
+  identifier: 100_epoch_faesm25m_4layer_smallbert
 
 trainer:
-  max_epochs: 50
-  devices: [0]
-  enable_progress_bar: True
-  precision: bf16
-  # resume_from_checkpoint: trained_models/esm150m_smallbert_fae/model-epoch=00.ckpt
-  # precision: 32
-  # strategy: ddp
-  # resume_from_checkpoint: None
-
-
-pl_module: DualEncoder
+  trainer_type: clip_trainer.CLIPTrainer
+  trainer_args:
+    max_epochs: 100
+    devices: [0]
+    enable_progress_bar: False
+    use_amp: True
+    # resume_from_checkpoint: trained_models/2024-12-22-02-32-37-test/state.pt
+    # precision: 32
+    # strategy: ddp
+    # resume_from_checkpoint: None

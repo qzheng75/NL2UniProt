@@ -3,10 +3,9 @@ from __future__ import annotations
 import argparse
 import logging
 
-import pytorch_lightning as pl
-import torch
 from dotenv import load_dotenv
 from nl2prot.template.load_module import load_everything
+from nl2prot.trainer.base_trainer import BaseTrainer
 from torch.utils.data import DataLoader
 
 logging.basicConfig(level=logging.INFO)
@@ -24,21 +23,11 @@ def main(args):
     out = load_everything(args.config_path)
     logging.info("Successfully loaded all modules!")
 
-    module: pl.LightningModule = out["pl_module"]
-    trainer: pl.Trainer = out["trainer"]
+    trainer: BaseTrainer = out["trainer"]
     train_dataloader: DataLoader = out["train"]
     val_dataloader: DataLoader = out["val"]
 
-    try:
-        torch.set_float32_matmul_precision("high")
-    except AttributeError:
-        pass
-
-    ckpt = out.get("checkpoint", None)
-    if ckpt is not None:
-        trainer.fit(module, train_dataloader, val_dataloader, ckpt_path=ckpt)
-    else:
-        trainer.fit(module, train_dataloader, val_dataloader)
+    trainer.train(train_dataloader, val_dataloader)
 
 
 if __name__ == "__main__":
