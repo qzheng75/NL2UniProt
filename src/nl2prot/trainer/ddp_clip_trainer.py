@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import os
-import warnings
 from typing import override
 
 import torch
@@ -99,29 +98,3 @@ class DDPCLIPTrainer(CLIPTrainer):
         state["metrics"] = self.metrics
         save_path = os.path.join(self.save_dir, "best_state.pt")
         torch.save(state, save_path)
-
-    @override
-    def resume_from_checkpoint(self, checkpoint_path: str | None = None) -> None:
-        if checkpoint_path is None:
-            return
-
-        device = self.device if isinstance(self.device, str) else f"cuda:{self.device}"
-        checkpoint = torch.load(checkpoint_path, map_location=device)
-        self.curr_epoch = checkpoint["epoch"] + 1
-        self.model.load_state_dict(checkpoint["model"])
-        self.optimizer.load_state_dict(checkpoint["optimizer"])
-        self.metrics = checkpoint["metrics"]
-        self.best_metric = checkpoint["best_metric"]
-
-        try:
-            self.global_training_step = checkpoint["global_training_step"]
-        except KeyError:
-            self.global_training_step = 0
-            warnings.warn(
-                "Global training step not found in checkpoint. "
-                + "Maybe you're using an older version of this codebase. "
-                + "Report this issue if you're using the latest version."
-            )
-
-        if self.lr_scheduler is not None:
-            self.lr_scheduler.load_state_dict(checkpoint["scheduler"])
