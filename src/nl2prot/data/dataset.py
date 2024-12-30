@@ -6,6 +6,7 @@ from collections.abc import Callable
 from itertools import chain
 from typing import Any, override
 
+from nl2prot.data.utils import load_fasta
 from scanpy import read
 from torch.utils.data import Dataset
 
@@ -74,7 +75,7 @@ class DescDataset(Dataset):
 
 
 class RawDescSeqDataset(Dataset):
-    def __init__(self, adata_path, desc_path):
+    def __init__(self, data_path: str, desc_path: str):
         desc = {
             entry["id"]: entry["description"]
             for entry in json.load(open(desc_path, "r"))
@@ -83,11 +84,17 @@ class RawDescSeqDataset(Dataset):
             desc, desc, key_transform=lambda x: x.split("|")[0]
         )
 
-        self.adata = read(adata_path)
-        name2seq_dict = {
-            entry["accession"]: entry["seq"]
-            for entry in self.adata.obs.to_dict("records")
-        }
+        if data_path.endswith(".h5ad"):
+            adata = read(data_path)
+            name2seq_dict = {
+                entry["accession"]: entry["seq"]
+                for entry in adata.obs.to_dict("records")
+            }
+        elif data_path.endswith(".fasta"):
+            entries = load_fasta(data_path)
+            name2seq_dict = {entry[0]: entry[1] for entry in entries}
+        else:
+            raise ValueError("Invalid data file format")
 
         data = merge_dictionaries(
             name2seq_dict, desc_dict_with_names, allow_repeat_keys=True

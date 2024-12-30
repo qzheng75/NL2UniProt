@@ -107,9 +107,7 @@ class EsmBertEncoder(BaseDualEncoder):
         }
 
     @override
-    def forward(
-        self, batch: Any, return_embeddings=False, **kwargs
-    ) -> dict[str, Tensor] | Tensor:
+    def forward(self, batch: Any, only_embeddings=False, **kwargs) -> dict[str, Tensor]:
         names = batch["names"]
         prot_emb = batch["sequences"]
         desc_emb = batch["descriptions"]
@@ -125,10 +123,15 @@ class EsmBertEncoder(BaseDualEncoder):
             attention_mask=desc_emb["attention_mask"],
         )
 
-        if return_embeddings:
-            return {
-                "names": names,
-                "prot_embeddings": protein_features,
-                "desc_embeddings": desc_features,
-            }
-        return self.compute_similarity(desc_features, protein_features, **kwargs)
+        out_dict = {
+            "names": names,
+            "prot_embeddings": protein_features,
+            "desc_embeddings": desc_features,
+        }
+        if only_embeddings:
+            return out_dict
+
+        out_dict["similarity"] = self.compute_similarity(
+            desc_features, protein_features, **kwargs
+        )
+        return out_dict

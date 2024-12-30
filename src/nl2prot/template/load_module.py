@@ -11,6 +11,7 @@ from nl2prot.data.utils import split_dataset
 from nl2prot.models.base_model import BaseModel
 from nl2prot.modules import loss
 from nl2prot.modules.evaluator import Evaluator
+from nl2prot.modules.misc import Logger
 from nl2prot.modules.scheduler import LRScheduler
 from nl2prot.template.module_configs import (
     DataloaderConfig,
@@ -97,10 +98,22 @@ def load_dataloader(config: DataloaderConfig, dataset: Dataset) -> DataLoader:
     return get_dataloader(dataset, config)
 
 
-def load_everything(config_path: str) -> dict[str, Any]:
-    with open(config_path, "r") as f:
-        config = yaml.safe_load(f)
+def load_everything(
+    config_path: str | None = None,
+    config: dict | None = None,
+    logger: Logger | None = None,
+) -> dict[str, Any]:
+    assert (
+        config_path is not None or config is not None
+    ), "Either config_path or config must be provided"
 
+    if config_path is not None:
+        if config is not None:
+            warnings.warn("Both config_path and config provided. Using config_path.")
+        with open(config_path, "r") as f:
+            config = yaml.safe_load(f)
+
+    assert isinstance(config, dict), "Config must be a dictionary"
     loss_config = LossConfig(**config["loss"])
     loss = load_loss(loss_config)
 
@@ -137,11 +150,11 @@ def load_everything(config_path: str) -> dict[str, Any]:
         k: load_dataloader(v, datasets[k]) for k, v in dataloader_configs.items()
     }
 
-    if "logger" in config:
+    if logger is None and "logger" in config:
         logger_config = LoggerConfig(**config["logger"])
+        logger = Logger(logger_config)
     else:
-        logger_config = LoggerConfig(logger_type="stdout", logger_args={})
-        warnings.warn("No logger provided in config. Default to stdout.", UserWarning)
+        warnings.warn("No logger provided in config. No logging will happen.")
 
     if "save_model" in config:
         save_model_config = SaveModelConfig(**config["save_model"])
@@ -155,7 +168,6 @@ def load_everything(config_path: str) -> dict[str, Any]:
 
     trainer_type = config["trainer"]["trainer_type"]
     trainer_config = TrainerConfig(
-        logger_config=logger_config,
         save_model_config=save_model_config,
         **config["trainer"]["trainer_args"],
     )
@@ -169,7 +181,7 @@ def load_everything(config_path: str) -> dict[str, Any]:
         trainer_config=trainer_config,
         evaluator=evaluator,
         save_model_config=save_model_config,
-        logger_config=logger_config,
+        logger=logger,
         lr_scheduler=scheduler,
     )
 

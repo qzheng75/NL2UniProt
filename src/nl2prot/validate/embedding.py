@@ -58,7 +58,7 @@ def get_trainer(
     assert (
         module_config_path is not None and model_ckpt_path is not None
     ), "You must provide a module config and a model checkpoint"
-    all_modules = load_everything(module_config_path)
+    all_modules = load_everything(config_path=module_config_path)
     trainer: BaseTrainer = all_modules["trainer"]
 
     if isinstance(trainer, CLIPTrainer):

@@ -11,7 +11,8 @@ import wandb
 
 
 class Logger:
-    def __init__(self, logger_config: LoggerConfig):
+    def __init__(self, logger_config: LoggerConfig | None = None):
+        print(logger_config)
         self.logger_config = logger_config
         self._load_logger()
 
@@ -24,6 +25,7 @@ class Logger:
                 # Personally never used. May contain bugs
                 self.logger = SummaryWriter(**logger_args)
             elif logger_type == "wandb":
+                # print("Init wandb")
                 wandb.init(**logger_args)
             elif logger_type == "stdout":
                 logging.basicConfig(level=logging.INFO)
@@ -41,7 +43,9 @@ class Logger:
         metrics: dict[str, Any] | None,
         step: int,
         commit: bool = False,
-    ):
+    ) -> None:
+        if self.logger_config is None:
+            return
         if self.logger_config.logger_type == "tensorboard":
             # TODO: Implement tensorboard logging
             raise NotImplementedError("Tensorboard logging not implemented")

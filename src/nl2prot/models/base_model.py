@@ -23,9 +23,7 @@ class BaseDualEncoder(BaseModel, ABC):
 
     @abstractmethod
     @override
-    def forward(
-        self, batch: Any, return_embeddings=False, **kwargs
-    ) -> dict[str, Tensor] | Tensor:
+    def forward(self, batch: Any, only_embeddings=False, **kwargs) -> dict[str, Tensor]:
         pass
 
     def compute_similarity(
@@ -47,7 +45,7 @@ class BaseDualEncoder(BaseModel, ABC):
 
 
 def print_model_parameters(
-    model: BaseModel, show_non_trainable: bool = False, include_grad_flag: bool = True
+    model: nn.Module, show_non_trainable: bool = False, include_grad_flag: bool = True
 ) -> None:
     """
     Print model parameters in a well-formatted table.

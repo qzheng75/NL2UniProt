@@ -46,8 +46,9 @@ class DataloaderConfig:
     split: Literal["train", "val", "test"]
     collate_fn: Literal["default", "dual_encoder_collate_fn"]
     collate_args: dict[str, Any]
-    sampler_type: Literal["RandomSampler"]
+    sampler_type: Literal["RandomSampler", "DistributedSampler"]
     sampler_args: dict[str, Any]
+    num_workers: int = 0
 
 
 @dataclass
@@ -73,7 +74,6 @@ class LoggerConfig:
 @dataclass
 class TrainerConfig:
     max_epochs: int
-    logger_config: LoggerConfig
     save_model_config: SaveModelConfig
     resume_from_checkpoint: str | None = None
     use_amp: bool = False

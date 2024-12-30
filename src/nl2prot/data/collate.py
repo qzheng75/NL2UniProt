@@ -64,11 +64,17 @@ def get_dataloader(dataset: Dataset, config: DataloaderConfig):
     sampler = None
     if config.sampler_type == "RandomSampler":
         pass
-    # else:
-    #     raise ValueError(f"Sampler type {config['sampler_type']} not supported")
+    elif config.sampler_type == "DistributedSampler":
+        from torch.utils.data.distributed import DistributedSampler
+
+        sampler = DistributedSampler(dataset)
+        shuffle = None
+    else:
+        raise ValueError(f"Sampler type {config.sampler_type} not supported")
 
     return DataLoader(
         dataset,
+        num_workers=config.num_workers,
         batch_size=batch_size,
         shuffle=shuffle,
         collate_fn=collate_fn,

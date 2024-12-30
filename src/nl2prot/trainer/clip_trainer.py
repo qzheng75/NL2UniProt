@@ -7,8 +7,9 @@ import numpy as np
 import torch
 from nl2prot.models.base_model import BaseDualEncoder, BaseModel
 from nl2prot.modules.evaluator import Evaluator
+from nl2prot.modules.misc import Logger
 from nl2prot.modules.scheduler import LRScheduler
-from nl2prot.template.module_configs import LoggerConfig, SaveModelConfig, TrainerConfig
+from nl2prot.template.module_configs import SaveModelConfig, TrainerConfig
 from nl2prot.trainer.base_trainer import BaseTrainer
 from torch import nn
 from torch.amp import autocast
@@ -23,7 +24,7 @@ class CLIPTrainer(BaseTrainer):
         loss: nn.Module,
         trainer_config: TrainerConfig,
         save_model_config: SaveModelConfig,
-        logger_config: LoggerConfig,
+        logger: Logger,
         evaluator: Evaluator | None = None,
         lr_scheduler: LRScheduler | None = None,
         device: str | None = None,
@@ -35,7 +36,7 @@ class CLIPTrainer(BaseTrainer):
             trainer_config=trainer_config,
             evaluator=evaluator,
             save_model_config=save_model_config,
-            logger_config=logger_config,
+            logger=logger,
             lr_scheduler=lr_scheduler,
             device=device,
         )
@@ -57,19 +58,23 @@ class CLIPTrainer(BaseTrainer):
         self.metrics["train/epoch_loss"] = []
         self.metrics["val/epoch_loss"] = []
 
-    @override
-    def training_step(self, batch, batch_idx):
+    def check_model(self) -> None:
         assert isinstance(
             self.model, BaseDualEncoder
         ), "Model must be a dual encoder model"
+
+    @override
+    def training_step(self, batch, batch_idx):
+        self.check_model()
         if self.evaluator is not None:
-            out = self.model(batch, return_embeddings=True)
-            names, desc_emb, seq_emb = (
+            out = self.model(batch, only_embeddings=False)
+            names, _, seq_emb, similarity = (
                 out["names"],
                 out["desc_embeddings"],
                 out["prot_embeddings"],
+                out["similarity"],
             )
-            similarity = self.model.compute_similarity(desc_emb, seq_emb)
+
             loss = self.loss(similarity)
 
             seq_emb = seq_emb.detach().cpu().numpy()
@@ -81,7 +86,7 @@ class CLIPTrainer(BaseTrainer):
                 self.names.append(name)
                 self.seq_embs.append(seq_emb[i])
         else:
-            out = self.model(batch, return_embeddings=False)
+            out = self.model(batch, only_embeddings=False)
             loss = self.loss(out)
         return loss
 
@@ -109,19 +114,17 @@ class CLIPTrainer(BaseTrainer):
 
     @override
     def validation_step(self, batch, batch_idx):
-        assert isinstance(
-            self.model, BaseDualEncoder
-        ), "Model must be a dual encoder model"
+        self.check_model()
         if self.evaluator is not None:
-            out = self.model(batch, return_embeddings=True)
-            names, desc_emb, seq_emb = (
+            out = self.model(batch, only_embeddings=False)
+            names, desc_emb, _, similarity = (
                 out["names"],
                 out["desc_embeddings"],
                 out["prot_embeddings"],
+                out["similarity"],
             )
-            similarity = self.model.compute_similarity(desc_emb, seq_emb)
-            loss = self.loss(similarity)
 
+            loss = self.loss(similarity)
             desc_to_validate, idx_to_validate = [], []
 
             for i in range(len(names)):
@@ -162,9 +165,7 @@ class CLIPTrainer(BaseTrainer):
     @override
     @torch.no_grad()
     def predict_step(self, batch, batch_idx, **kwargs) -> Any:
-        assert isinstance(
-            self.model, BaseDualEncoder
-        ), "Model must be a dual encoder model"
+        self.check_model()
         assert isinstance(batch, dict), "Batch must be a dictionary"
         assert "batch_type" in batch.keys(), "batch_type must be present in batch"
         assert "tokens" in batch.keys(), "tokens must be present in batch"
@@ -179,9 +180,11 @@ class CLIPTrainer(BaseTrainer):
         else:
             assert self.model.desc_encoder is not None, "Description encoder not set"
             encoder = self.model.desc_encoder
+
+        device = self.device if isinstance(self.device, str) else f"cuda:{self.device}"
         with autocast(
             enabled=self.trainer_config.use_amp and torch.cuda.is_available(),
-            device_type=self.device,
+            device_type=device,
         ):
             embeddings = encoder(**batch["tokens"])
         return {"accessions": batch["accessions"], "embeddings": embeddings}

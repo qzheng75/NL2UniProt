@@ -36,22 +36,22 @@ dataset:
     train:
       data_path: raw_data/fasta_files/latest_human_seqs.fasta
       desc_path: raw_data/misc/train_descriptions.json
-      use_ratio: 0.1
+      use_ratio: 1.0
     val:
       data_path: raw_data/fasta_files/latest_human_seqs.fasta
       desc_path: raw_data/misc/val_descriptions.json
-      use_ratio: 0.1
+      use_ratio: 1.0
 
 dataloader:
-  batch_size: 32
-  num_workers: 4
+  batch_size: 64
+  num_workers: 2
   collate_fn: dual_encoder_collate_fn
   collate_args:
     seq_tokenizer_args:
-      pretrained_model_name_or_path: facebook/esm2_t12_35M_UR50D #facebook/esm2_t30_150M_UR50D
+      pretrained_model_name_or_path: facebook/esm2_t30_150M_UR50D #facebook/esm2_t30_150M_UR50D
     desc_tokenizer_args:
       pretrained_model_name_or_path: prajjwal1/bert-small
-  sampler_type: RandomSampler #DistributedSampler
+  sampler_type: DistributedSampler
   sampler_args: {}
 
 evaluator:
@@ -60,28 +60,27 @@ evaluator:
     ks: [20, 50, 100]
 
 logger:
-  logger_type: stdout #wandb
-  logger_args: {}
-    # project: NL2UniProt
-    # name: test
-    # group: DDP
+  logger_type: wandb
+  logger_args: #{}
+    project: NL2UniProt
+    name: DDP-GPU0-Latest-ESM150M-Bert-Mixed-Data
     # offline: False
 
 save_model:
-  save_model: false
+  save_model: true
   mode: min
   monitor: val/epoch_loss
-  save_model_dir: trained_models #trained_models/esm_bert #esm25m_4layer_smallbert
-  identifier: test #latest_mixed_data_esm25m_smallbert
+  save_model_dir: trained_models/esm_bert #esm25m_4layer_smallbert
+  identifier: latest_mixed_data_esm150m_smallbert
 
 trainer:
-  trainer_type: clip_trainer.CLIPTrainer
+  trainer_type: ddp_clip_trainer.DDPCLIPTrainer
   trainer_args:
     max_epochs: 50
     # device: cuda:0
-    enable_progress_bar: True
+    enable_progress_bar: false
     use_amp: true
-    # resume_from_checkpoint: trained_models/2024-12-23-03-14-25-test/state.pt
+    # resume_from_checkpoint: trained_models/2024-12-30-01-57-49-test/state.pt
     # precision: 32
     # strategy: ddp
     # resume_from_checkpoint: None
