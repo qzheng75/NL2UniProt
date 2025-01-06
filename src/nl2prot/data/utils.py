@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-import json
 import os
 import warnings
-from collections.abc import Callable
-from typing import Literal
 
 import torch
 from Bio import SeqIO
+from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
+from google.cloud import storage
 from torch.utils.data import Dataset, random_split
 
 
@@ -41,126 +41,6 @@ def split_dataset(
     return train_dataset, val_dataset, test_dataset
 
 
-def load_embedding_str(
-    embedding_path: str,
-    sequence_identifiers: list[str],
-    return_format: Literal["original", "id_repr_dict"],
-    not_found_policy: Literal["raise", "ignore"] = "raise",
-) -> list[dict] | dict:
-    """
-    Load sequence embeddings from a file and return them in the specified format.
-
-    Args:
-        embedding_path (str): The path to the file containing the sequence embeddings.
-        sequence_identifiers (list[str]):
-            A list of sequence identifiers to retrieve embeddings for.
-        return_format (Literal['original', 'id_repr_dict']):
-            The desired format of the returned embeddings.
-            'original': Return a list of dictionaries,
-            where each dictionary has a key=identifier and value=embedding.
-            'id_repr_dict': Return a dictionary with key=identifier and value=embedding.
-
-    Returns:
-        list[dict] | dict: The loaded embeddings in the specified format.
-
-    Raises:
-        ValueError: If any sequence identifier is not found in the saved embeddings.
-    """
-    with open(embedding_path, "r") as f:
-        embeddings = json.load(f)
-
-    matches = [] if return_format == "original" else {}
-
-    for seq in sequence_identifiers:
-        match = next((d for d in embeddings if d["entry_id"] == seq), None)
-        if match is None:
-            if not_found_policy == "ignore":
-                continue
-            raise ValueError(f"Sequence {seq} not found in the saved embeddings")
-        if return_format == "original":
-            assert isinstance(matches, list)
-            matches.append(match)
-        else:
-            assert isinstance(matches, dict)
-            matches[seq] = match["mean_representations"]
-
-    return matches
-
-
-def load_embedding_fasta(
-    embedding_path: str,
-    fasta_path: str,
-    identifier: Literal["label", "sequence"],
-    label_parse_fn: Callable[[str], str] = lambda x: x,
-    return_format: Literal["original", "id_repr_dict"] = "id_repr_dict",
-    not_found_policy: Literal["raise", "ignore"] = "raise",
-) -> list[dict] | dict:
-    """
-    Load sequence embeddings from a FASTA file.
-
-    Args:
-        embedding_path (str):
-            The path to the file containing the sequence embeddings.
-        fasta_path (str):
-            The path to the FASTA file containing the sequence identifiers.
-        identifier (Literal['label', 'sequence']): The type of identifier to use.
-            'label' uses the label_parse_fn to parse the sequence identifier.
-            'sequence' uses the sequence itself as the identifier.
-        label_parse_fn (Callable[[str], str], optional):
-            A function to parse the sequence identifier.
-            This function is only used if the identifier is set to 'label'.
-            Defaults to `lambda x: x`.
-        return_format (Literal['original', 'id_repr_dict'], optional):
-            The format of the returned embeddings.
-            'original' returns a list of dictionaries,
-                where each dictionary has the identifier as the key
-                and the embedding as the value.
-            'id_repr_dict' returns a dictionary with the identifier as the key
-                and the embedding as the value. Defaults to 'id_repr_dict'.
-
-    Returns:
-        list[dict] or dict: The loaded sequence embeddings.
-            If 'return_format' is set to 'original', a list of dictionaries is returned.
-            If 'return_format' is set to 'id_repr_dict', a dictionary is returned.
-
-    Raises:
-        ValueError: If the 'identifier' argument is not set to 'label' or 'sequence'.
-    """
-    fasta_entries = load_fasta(fasta_path)
-
-    if identifier == "label":
-        sequence_identifiers = [label_parse_fn(id) for id, _ in fasta_entries]
-    elif identifier == "sequence":
-        sequence_identifiers = [seq for _, seq in fasta_entries]
-    else:
-        raise ValueError(f"Invalid value for 'identifier': {identifier}")
-
-    return load_embedding_str(
-        embedding_path, sequence_identifiers, return_format, not_found_policy
-    )
-
-
-def save_embeddings(
-    embeddings: list[dict],
-    output_path: str,
-) -> None:
-    """
-    Save the embeddings to a JSON file.
-
-    Args:
-        embeddings (list[dict]):
-            A list of dictionaries representing the embeddings.
-        output_path (str):
-            The path to the directory where the output file will be saved.
-
-    Returns:
-        None
-    """
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    with open(output_path, "w") as f:
-        json.dump(embeddings, f)
-
-
 def load_fasta(file_path: str) -> list[tuple[str, str]]:
     """
     Load a fasta file and return a list of tuples,
@@ -186,3 +66,72 @@ def load_fasta(file_path: str) -> list[tuple[str, str]]:
             (record.id, str(record.seq)) for record in SeqIO.parse(file, "fasta")
         )
     return entries
+
+
+def write_fasta(identifiers: list[str], sequences: list[str], file_path: str) -> None:
+    """
+    Write a list of identifiers and sequences to a fasta file
+
+    Args:
+        identifiers (list[str]): A list of identifiers.
+        sequences (list[str]): A list of sequences.
+
+    Raises:
+        ValueError: If the lengths of the identifiers and sequences do not match.
+
+    Example:
+        >>> write_fasta(["identifier1", "identifier2"], ["sequence1", "sequence2"])
+    """
+    if len(identifiers) != len(sequences):
+        raise ValueError("The number of identifiers and sequences must be the same.")
+
+    records = [
+        SeqRecord(Seq(sequence), id=name, description="")
+        for name, sequence in zip(identifiers, sequences)
+    ]
+    SeqIO.write(records, file_path, "fasta")
+
+
+def download_from_gcs(bucket_name: str, src_folder: str, dest_folder: str) -> None:
+    """
+    Download all files from a GCS bucket folder to a local directory.
+
+    Args:
+        bucket_name: Name of the GCS bucket
+        src_folder: Source folder path in the bucket
+        dest_folder: Local destination folder path
+    """
+    client = storage.Client()
+    bucket = client.bucket(bucket_name)
+    all_blobs = bucket.list_blobs()
+
+    for blob in all_blobs:
+        if blob.name == src_folder or blob.name.endswith("/"):
+            continue
+
+        dest_path = os.path.join(dest_folder, blob.name)
+        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+        blob.download_to_filename(dest_path)
+
+
+def upload_to_gcs(bucket_name: str, src_folder: str, dest_folder: str) -> None:
+    """
+    Upload all files from a local directory to a GCS bucket folder.
+
+    Args:
+        bucket_name: Name of the GCS bucket
+        src_folder: Source folder path in the local directory
+        dest_folder: Destination folder path in the bucket
+    """
+    client = storage.Client()
+    bucket = client.bucket(bucket_name)
+
+    for root, _, files in os.walk(src_folder):
+        for file in files:
+            local_path = os.path.join(root, file)
+            blob_path = os.path.join(
+                dest_folder, os.path.relpath(local_path, src_folder)
+            )
+
+            blob = bucket.blob(blob_path)
+            blob.upload_from_filename(local_path)

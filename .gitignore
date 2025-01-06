@@ -162,3 +162,5 @@ trained_models/
 scripts/slurm/
 logs/
 *old*
+model_cache/
+google_cloud/

@@ -36,11 +36,11 @@ dataset:
     train:
       data_path: raw_data/fasta_files/latest_human_seqs.fasta
       desc_path: raw_data/misc/train_descriptions.json
-      use_ratio: 0.1
+      use_ratio: 1.0
     val:
       data_path: raw_data/fasta_files/latest_human_seqs.fasta
       desc_path: raw_data/misc/val_descriptions.json
-      use_ratio: 0.1
+      use_ratio: 1.0
 
 dataloader:
   batch_size: 32
@@ -60,26 +60,26 @@ evaluator:
     ks: [20, 50, 100]
 
 logger:
-  logger_type: stdout #wandb
-  logger_args: {}
-    # project: NL2UniProt
-    # name: test
+  logger_type: wandb
+  logger_args: #{}
+    project: NL2UniProt
+    name: 4x-mixed-data-esm25m-smallbert
     # group: DDP
     # offline: False
 
 save_model:
-  save_model: false
+  save_model: true
   mode: min
   monitor: val/epoch_loss
-  save_model_dir: trained_models #trained_models/esm_bert #esm25m_4layer_smallbert
-  identifier: test #latest_mixed_data_esm25m_smallbert
+  save_model_dir: trained_models/esm_bert #esm25m_4layer_smallbert
+  identifier: 4x_mixed_data_esm25m_smallbert
 
 trainer:
   trainer_type: clip_trainer.CLIPTrainer
   trainer_args:
     max_epochs: 50
     # device: cuda:0
-    enable_progress_bar: True
+    enable_progress_bar: false
     use_amp: true
     # resume_from_checkpoint: trained_models/2024-12-23-03-14-25-test/state.pt
     # precision: 32

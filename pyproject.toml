@@ -12,6 +12,7 @@ authors = [
 readme = "README.rst"
 requires-python = ">=3.12"  # Adjust based on your minimum Python version requirement
 dependencies = [
+    "requests",
     "prettytable",
     "pyyaml",
     "tqdm",
@@ -22,7 +23,6 @@ dependencies = [
     "scikit-learn",
     "transformers",
     "python-dotenv",
-    "lightning",
     "biopython",
     "wandb",
     "tensorboard",
@@ -30,6 +30,7 @@ dependencies = [
     "ruff",
     "pyright",
     "pre-commit",
+    "google-cloud-storage",
 ]
 
 [project.optional-dependencies]

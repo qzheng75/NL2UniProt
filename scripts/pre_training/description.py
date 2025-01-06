@@ -44,24 +44,31 @@ if __name__ == "__main__":
         all_prot_info.extend([df.iloc[j].to_json() for j in range(len(df))])
 
     pmt = (
-        "Return empty string if there isn't enough information. "
-        + "Don't give the exact name or numbers. Use layman language to "
-        + "summarize this protein sequence in 1 sentence. Start with: "
+        "Don't give the exact name or numbers. Use extremely simple, "
+        + "layman language to "
+        + "summarize this protein sequence in no more than 10 words. Start with: "
         + "'I want a protein with ...'. Don't mention not available features."
     )
-    pmt = (
-        "Return empty string if there isn't enough information."
-        + " Use professtional terminology"
-        + " to summarize this protein sequence in 2 sentences. Start with:"
-        + " I want a protein with ...'. IMPORTANT: Don't give the exact name or"
-        + " numbers or mention not available features."
-    )
+    # pmt = (
+    #     "Return empty string if there isn't enough information. "
+    #     + "Don't give the exact name or numbers. Use layman language to "
+    #     + "summarize this protein sequence in 1 sentence. Start with: "
+    #     + "'I want a protein with ...'. Don't mention not available features."
+    # )
+    # pmt = (
+    #     "Return empty string if there isn't enough information."
+    #     + " Use professtional terminology"
+    #     + " to summarize this protein sequence in 2 sentences. Start with:"
+    #     + " I want a protein with ...'. IMPORTANT: Don't give the exact name or"
+    #     + " numbers or mention not available features."
+    # )
     tokenizer, model = gd.load_model()
     output = gd.generate_description(
         tokenizer,
         model,
         all_ids,
         all_prot_info,
+        batch_size=2,
         prompt=pmt,
         verbose=args.verbose,
         max_new_tokens=args.max_new_tokens,

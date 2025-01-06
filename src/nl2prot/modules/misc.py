@@ -12,7 +12,6 @@ import wandb
 
 class Logger:
     def __init__(self, logger_config: LoggerConfig | None = None):
-        print(logger_config)
         self.logger_config = logger_config
         self._load_logger()
 

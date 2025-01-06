@@ -218,6 +218,9 @@ class BaseTrainer(ABC):
                 self.lr_scheduler.step(epoch=self.global_training_step)
 
     def train(self, train_loader: DataLoader, val_loader: DataLoader) -> None:
+        train_size = len(train_loader.dataset)  # type: ignore
+        val_size = len(val_loader.dataset)  # type: ignore
+        logging.info(f"Dataset sizes: (train: {train_size}, val: {val_size})")
         print_model_parameters(self.model)
         if self.global_training_step != 0:
             logging.info(
