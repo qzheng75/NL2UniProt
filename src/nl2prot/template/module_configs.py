@@ -61,6 +61,7 @@ class SaveModelConfig:
     filename: str = "model-{epoch:02d}"
     save_top_k: int = 1
     every_n_epoch: int = 1
+    submit_to_gcs: bool = False
 
 
 @dataclass

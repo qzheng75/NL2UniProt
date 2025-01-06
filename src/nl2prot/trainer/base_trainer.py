@@ -9,6 +9,7 @@ from time import time
 from typing import Any
 
 import torch
+from nl2prot.data.utils import upload_to_gcs
 from nl2prot.models.base_model import print_model_parameters
 from nl2prot.modules.evaluator import Evaluator
 from nl2prot.modules.misc import Logger
@@ -315,6 +316,14 @@ class BaseTrainer(ABC):
                 commit=True,
             )
             self.curr_epoch += 1
+
+        if self.save_model_config.save_model:
+            logging.info(
+                f"Final trained model state can be found under {self.save_dir}"
+            )
+        if self.save_model_config.submit_to_gcs:
+            upload_to_gcs("dsgt-nl2uniprot", self.save_dir, self.save_dir)
+            logging.info(f"Model uploaded to GCS under {self.save_dir}")
 
     @torch.no_grad()
     def validate(self, loader: DataLoader):

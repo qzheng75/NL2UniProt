@@ -164,3 +164,4 @@ logs/
 *old*
 model_cache/
 google_cloud/
+.vscode/

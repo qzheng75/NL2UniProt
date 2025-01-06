@@ -75,11 +75,21 @@ class DescDataset(Dataset):
 
 
 class RawDescSeqDataset(Dataset):
-    def __init__(self, data_path: str, desc_path: str):
-        desc = {
+    def __init__(
+        self, data_path: str, desc_path: str, use_copy: list[int] | None = None
+    ):
+        desc: dict[str, str] = {
             entry["id"]: entry["description"]
             for entry in json.load(open(desc_path, "r"))
         }
+        if use_copy is not None:
+            pattern_set = set(use_copy)
+            desc = {
+                key: value
+                for key, value in desc.items()
+                if int(key.split("|")[-1]) in pattern_set
+            }
+
         desc_dict_with_names = merge_dictionaries(
             desc, desc, key_transform=lambda x: x.split("|")[0]
         )

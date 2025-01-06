@@ -1,13 +1,21 @@
 #!/bin/bash
 # This script installs the necessary dependencies for the NL2UniProt project.
 
-use_flash_attn=$1
+use_flash_attn="True"
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --no_flash) use_flash_attn="False" ;;  # Disable when flag is present
+        *) echo "Unknown parameter passed: $1"; exit 1 ;;
+    esac
+    shift
+done
 pip install -e .
 
-# You mau need to change the cuda version to match your system
+# You may need to change the cuda version to match your system
 pip uninstall torch torchvision torchaudio
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
+# Optional: Install flash-attn and faesm[flash_attn]
 if [ $use_flash_attn == "True" ]; then
     pip install flash-attn --no-build-isolation
     pip install faesm[flash_attn]
@@ -16,3 +24,13 @@ else
 fi
 
 pre-commit install
+
+clear
+echo "Installation complete! Creating .env file..."
+touch .env
+echo "export MODEL_CACHE=$PWD/model_cache" >> .env
+echo "export GOOGLE_APPLICATION_CREDENTIALS=$PWD/google_cloud/credential.json" >> .env
+echo "Complete! You can adjust the .env file as needed."
+
+echo "===================="
+echo "Suggested next steps: setup wandb and google cloud credentials, download data and models."
