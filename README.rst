@@ -27,10 +27,13 @@ To get started with the NL2UniProt project, follow these steps:
     add a flag `--no_flash` to the installation script.
     
     With Flash Attention:
+
     ```
     bash scripts/installation/install_dependencies.sh
     ```
+
     or without Flash Attention:
+
     ```
     bash scripts/installation/install_dependencies.sh --no_flash
     ```
@@ -39,6 +42,7 @@ To get started with the NL2UniProt project, follow these steps:
 
     This project currently supports wandb logging. To use wandb logging, you need to setup wandb by running the following command.
     Make sure that you have a wandb account before running this command.
+
     ```
     wandb login
     ```
@@ -49,6 +53,7 @@ To get started with the NL2UniProt project, follow these steps:
 5. **Download data and trained models for the project**
 
     Run the following command to download the necessary data and trained models from GCS for the project:
+
     ```
     python scripts/installation/download.py
     ```
