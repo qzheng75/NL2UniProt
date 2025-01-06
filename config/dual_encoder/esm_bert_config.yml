@@ -62,10 +62,10 @@ evaluator:
     ks: [20, 50, 100]
 
 logger:
-  logger_type: wandb
-  logger_args: #{}
-    project: NL2UniProt
-    name: 3x-mixed-data-esm25m-smallbert
+  logger_type: stdout #wandb
+  logger_args: {}
+    # project: NL2UniProt
+    # name: 3x-mixed-data-esm25m-smallbert
     # group: DDP
     # offline: False
 

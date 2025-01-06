@@ -53,7 +53,10 @@ def compute_embeddings(
 
 
 def get_trainer(
-    module_config_path: str, model_ckpt_path: str, quantize_model: bool = False
+    module_config_path: str,
+    model_ckpt_path: str,
+    quantize_model: bool = False,
+    device: str = "cuda",
 ) -> BaseTrainer:
     assert (
         module_config_path is not None and model_ckpt_path is not None
@@ -66,6 +69,8 @@ def get_trainer(
     else:
         raise NotImplementedError("Only CLIPTrainer is supported for now")
 
+    trainer.model = trainer.model.to(device)
+    trainer.device = device
     if quantize_model:
         from torch.quantization import quantize_dynamic
 
