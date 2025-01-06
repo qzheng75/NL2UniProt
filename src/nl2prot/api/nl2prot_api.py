@@ -40,7 +40,7 @@ class NL2ProtAPI:
 
         quantize_model = self.config["model"].get("quantize", False)
         self.device = self.config["trainer"]["trainer_args"].get("device", "cpu")
-        self.trainer = get_trainer(config, str(ckpt_path), quantize_model)
+        self.trainer = get_trainer(config, str(ckpt_path), quantize_model, self.device)
 
     def recommend_sequences(
         self, description: str | list[str], top_k: int = 20

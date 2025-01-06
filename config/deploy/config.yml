@@ -35,12 +35,12 @@ dataset:
   dataset_type: RawDescSeqDataset
   dataset_args:
     train:
-      adata_path: raw_data/adata/human_adata.h5ad
-      desc_path: raw_data/descriptions/train_desc.json
+      data_path: raw_data/fasta_files/latest_human_seqs.fasta
+      desc_path: raw_data/misc/train_descriptions.json
       use_ratio: 1.0
     val:
-      adata_path: raw_data/adata/human_adata.h5ad
-      desc_path: raw_data/descriptions/val_desc.json
+      data_path: raw_data/fasta_files/latest_human_seqs.fasta
+      desc_path: raw_data/misc/val_descriptions.json
       use_ratio: 1.0
 
 dataloader:
@@ -76,6 +76,6 @@ trainer:
     max_epochs: 50
     device: "cuda"
     enable_progress_bar: False
-    use_amp: True
-    resume_from_checkpoint: trained_models/esm_bert/2024-12-23-00-12-55-esm25m_4layer_smallbert/best_state.pt
+    use_amp: false
+    resume_from_checkpoint: trained_models/esm_bert/2025-01-05-16-06-30-4x_mixed_data_esm25m_smallbert/best_state.pt
     device: cpu
