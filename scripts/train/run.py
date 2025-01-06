@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import warnings
 
 from dotenv import load_dotenv
 from nl2prot.template.load_module import load_everything
@@ -31,5 +32,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    args = parse_args()
-    main(args)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        args = parse_args()
+        main(args)

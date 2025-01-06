@@ -51,8 +51,8 @@ def main(args):
         raise FileNotFoundError(f"Model checkpoint file not found: {model_ckpt_path}")
 
     _, embeddings = embed_sequences(
+        args.module_config_path,
         model_ckpt_path,
-        args.model_ckpt_path,
         args.tokenizer_args,
         args.fasta_file,
         args.raw_sequences,

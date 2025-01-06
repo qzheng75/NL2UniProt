@@ -5,36 +5,38 @@ import os
 import warnings
 from abc import ABC, abstractmethod
 from datetime import datetime
+from time import time
 from typing import Any
 
 import torch
-from nl2prot.models.base_model import BaseModel, print_model_parameters
+from nl2prot.data.utils import upload_to_gcs
+from nl2prot.models.base_model import print_model_parameters
 from nl2prot.modules.evaluator import Evaluator
 from nl2prot.modules.misc import Logger
 from nl2prot.modules.scheduler import LRScheduler
-from nl2prot.template.module_configs import LoggerConfig, SaveModelConfig, TrainerConfig
+from nl2prot.template.module_configs import SaveModelConfig, TrainerConfig
 from torch import Tensor, nn
 from torch.amp import GradScaler, autocast
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
+from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm
 
 
 class BaseTrainer(ABC):
     def __init__(
         self,
-        model: BaseModel,
+        model: nn.Module,
         optimizer: Optimizer,
         loss: nn.Module,
         trainer_config: TrainerConfig,
         save_model_config: SaveModelConfig,
-        logger_config: LoggerConfig,
+        logger: Logger,
         evaluator: Evaluator | None = None,
         lr_scheduler: LRScheduler | None = None,
         device: str | None = None,
     ):
         self.model = model
-        print_model_parameters(model)
         self.optimizer = optimizer
         self.loss = loss
         self.save_model_config = save_model_config
@@ -46,9 +48,8 @@ class BaseTrainer(ABC):
             float("inf") if self.save_model_config.mode == "min" else float("-inf")
         )
 
-        self.logger_config = logger_config
         self.log_per = trainer_config.log_every_n_steps
-        self.logger = Logger(logger_config)
+        self.logger = logger
 
         self.evaluator = evaluator
         self.trainer_config = trainer_config
@@ -120,7 +121,8 @@ class BaseTrainer(ABC):
         if checkpoint_path is None:
             return
 
-        checkpoint = torch.load(checkpoint_path, map_location=self.device)
+        device = self.device if isinstance(self.device, str) else f"cuda:{self.device}"
+        checkpoint = torch.load(checkpoint_path, map_location=device)
         self.curr_epoch = checkpoint["epoch"] + 1
         self.model.load_state_dict(checkpoint["model"])
         self.optimizer.load_state_dict(checkpoint["optimizer"])
@@ -217,6 +219,10 @@ class BaseTrainer(ABC):
                 self.lr_scheduler.step(epoch=self.global_training_step)
 
     def train(self, train_loader: DataLoader, val_loader: DataLoader) -> None:
+        train_size = len(train_loader.dataset)  # type: ignore
+        val_size = len(val_loader.dataset)  # type: ignore
+        logging.info(f"Dataset sizes: (train: {train_size}, val: {val_size})")
+        print_model_parameters(self.model)
         if self.global_training_step != 0:
             logging.info(
                 f"Already training {self.global_training_step} steps. "
@@ -230,23 +236,37 @@ class BaseTrainer(ABC):
             )
 
         while self.curr_epoch < self.trainer_config.max_epochs:
+            epoch_start_time = time()
             self.model.train()
             self.before_train_epoch()
 
-            epoch_train_total_loss = 0.0
+            # DDP
+            if isinstance(train_loader.sampler, DistributedSampler):
+                train_loader.sampler.set_epoch(self.curr_epoch)
+
+            train_loader_iter = iter(train_loader)
             pbar = tqdm(
-                train_loader, disable=not self.trainer_config.enable_progress_bar
+                range(0, len(train_loader_iter)),
+                disable=not self.trainer_config.enable_progress_bar,
             )
 
+            epoch_train_total_loss = 0.0
             accumulate_train_loss = 0.0
             accumulate_grad_norm = 0.0
-            for batch_idx, batch in enumerate(pbar):
-                batch = self.__batch_to_device(batch)
+
+            for batch_idx in pbar:
+                batch = next(train_loader_iter)
+                device = (
+                    self.device
+                    if isinstance(self.device, str)
+                    else f"cuda:{self.device}"
+                )
 
                 with autocast(
                     enabled=self.trainer_config.use_amp and torch.cuda.is_available(),
-                    device_type=self.device,
+                    device_type=device,
                 ):
+                    batch = self.__batch_to_device(batch)
                     loss = self.training_step(batch, batch_idx)
 
                 grad_norm = self.__backward(loss)
@@ -289,7 +309,21 @@ class BaseTrainer(ABC):
                 self.__scheduler_step(monitor_metric)
 
             self.save_state()
+            epoch_end_time = time()
+            self.logger.log(
+                {"epoch_time": epoch_end_time - epoch_start_time},
+                self.global_training_step,
+                commit=True,
+            )
             self.curr_epoch += 1
+
+        if self.save_model_config.save_model:
+            logging.info(
+                f"Final trained model state can be found under {self.save_dir}"
+            )
+        if self.save_model_config.submit_to_gcs:
+            upload_to_gcs("dsgt-nl2uniprot", self.save_dir, self.save_dir)
+            logging.info(f"Model uploaded to GCS under {self.save_dir}")
 
     @torch.no_grad()
     def validate(self, loader: DataLoader):
@@ -299,11 +333,13 @@ class BaseTrainer(ABC):
         epoch_val_total_loss = 0.0
 
         pbar = tqdm(loader, disable=not self.trainer_config.enable_progress_bar)
+        device = self.device if isinstance(self.device, str) else f"cuda:{self.device}"
+
         for batch_idx, batch in enumerate(pbar):
             batch = self.__batch_to_device(batch)
             with autocast(
                 enabled=self.trainer_config.use_amp and torch.cuda.is_available(),
-                device_type=self.device,
+                device_type=device,
             ):
                 val_loss = self.validation_step(batch, batch_idx)
 
@@ -314,7 +350,5 @@ class BaseTrainer(ABC):
         val_loss = epoch_val_total_loss / len(loader)
 
         # Final log, flush
-        self.logger.log(
-            {"val/epoch_loss": val_loss}, self.global_training_step, commit=True
-        )
+        self.logger.log({"val/epoch_loss": val_loss}, self.global_training_step)
         self.metrics["val/epoch_loss"].append(val_loss)

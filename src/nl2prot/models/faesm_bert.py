@@ -115,9 +115,7 @@ class FAEsmBertEncoder(BaseDualEncoder):
         }
 
     @override
-    def forward(
-        self, batch: Any, return_embeddings=False, **kwargs
-    ) -> dict[str, Tensor] | Tensor:
+    def forward(self, batch: Any, only_embeddings=False, **kwargs) -> dict[str, Tensor]:
         names = batch["names"]
         prot_emb = batch["sequences"]
         desc_emb = batch["descriptions"]
@@ -129,12 +127,16 @@ class FAEsmBertEncoder(BaseDualEncoder):
         protein_features = self.prot_encoder(**prot_emb)
         desc_features = self.desc_encoder(**desc_emb)
 
-        if return_embeddings:
-            return {
-                "names": names,
-                "prot_embeddings": protein_features,
-                "desc_embeddings": desc_features,
-            }
-        logit_scale = self.logit_scale.exp()
-        similarity = logit_scale * protein_features @ desc_features.T
-        return similarity
+        out_dict = {
+            "names": names,
+            "prot_embeddings": protein_features,
+            "desc_embeddings": desc_features,
+        }
+
+        if only_embeddings:
+            return out_dict
+
+        out_dict["similarity"] = self.compute_similarity(
+            desc_features, protein_features, **kwargs
+        )
+        return out_dict

@@ -15,9 +15,7 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--n_desc", type=int, default=1)
     parser.add_argument("--sample", type=int, default=-1)
-    parser.add_argument(
-        "--output_path", type=str, default="raw_data/misc/descriptions.json"
-    )
+    parser.add_argument("--output_path", type=str, default="raw_data/misc/output.json")
     parser.add_argument("--verbose", type=int, default=-1)
     parser.add_argument("--max_new_tokens", type=int, default=256)
     return parser.parse_args()
@@ -27,7 +25,7 @@ if __name__ == "__main__":
     load_dotenv()
 
     args = get_args()
-    df = pd.read_csv("data/uniprot_processed.tsv", sep="\t")
+    df = pd.read_csv("raw_data/new_uniprot_processed.tsv", sep="\t")
     df = df.drop(columns=["Entry Name", "Gene Names", "Sequence", "Length"], axis=1)
 
     all_ids = []
@@ -46,17 +44,31 @@ if __name__ == "__main__":
         all_prot_info.extend([df.iloc[j].to_json() for j in range(len(df))])
 
     pmt = (
-        "Return empty string if there isn't enough information. "
-        + "Don't give the exact name or numbers. Use layman language to "
-        + "summarize this protein sequence in 1 sentence. Start with: "
+        "Don't give the exact name or numbers. Use extremely simple, "
+        + "layman language to "
+        + "summarize this protein sequence in no more than 10 words. Start with: "
         + "'I want a protein with ...'. Don't mention not available features."
     )
+    # pmt = (
+    #     "Return empty string if there isn't enough information. "
+    #     + "Don't give the exact name or numbers. Use layman language to "
+    #     + "summarize this protein sequence in 1 sentence. Start with: "
+    #     + "'I want a protein with ...'. Don't mention not available features."
+    # )
+    # pmt = (
+    #     "Return empty string if there isn't enough information."
+    #     + " Use professtional terminology"
+    #     + " to summarize this protein sequence in 2 sentences. Start with:"
+    #     + " I want a protein with ...'. IMPORTANT: Don't give the exact name or"
+    #     + " numbers or mention not available features."
+    # )
     tokenizer, model = gd.load_model()
     output = gd.generate_description(
         tokenizer,
         model,
         all_ids,
         all_prot_info,
+        batch_size=2,
         prompt=pmt,
         verbose=args.verbose,
         max_new_tokens=args.max_new_tokens,
