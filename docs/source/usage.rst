@@ -41,6 +41,8 @@ As Project Developer
 
 If you're a developer of the project (e.g. you want to train your models), you need to perform additional steps to configure wandb for logging and huggingface for downloading pretrained models. Instructions can be found online and won't be specified here.
 
+.. _api_use:
+
 Use NL2UniProt API
 ----------------
 
