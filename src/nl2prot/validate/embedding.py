@@ -10,7 +10,6 @@ from nl2prot.data.collate import single_encoder_collate_fn
 from nl2prot.data.dataset import DescDataset, ProtDataset
 from nl2prot.template.load_module import load_everything
 from nl2prot.trainer.base_trainer import BaseTrainer
-from nl2prot.trainer.clip_trainer import CLIPTrainer
 from tqdm import tqdm
 
 
@@ -63,11 +62,6 @@ def get_trainer(
     ), "You must provide a module config and a model checkpoint"
     all_modules = load_everything(config_path=module_config_path)
     trainer: BaseTrainer = all_modules["trainer"]
-
-    if isinstance(trainer, CLIPTrainer):
-        trainer.resume_from_checkpoint(model_ckpt_path)
-    else:
-        raise NotImplementedError("Only CLIPTrainer is supported for now")
 
     trainer.model = trainer.model.to(device)
     trainer.device = device

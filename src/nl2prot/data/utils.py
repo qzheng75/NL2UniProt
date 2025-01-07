@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import warnings
+from pathlib import Path
 
 import torch
 from Bio import SeqIO
@@ -92,6 +93,25 @@ def write_fasta(identifiers: list[str], sequences: list[str], file_path: str) ->
     SeqIO.write(records, file_path, "fasta")
 
 
+def is_in_folder(file_path: str, folder_path: str) -> bool:
+    """
+    Check if a file is inside a folder or its subfolders.
+
+    Args:
+        file_path (str): Path to the file
+        folder_path (str): Path to the folder to check
+
+    Returns:
+        bool: True if the file is in the folder or its subfolders, False otherwise
+    """
+    file = Path(file_path)
+    folder = Path(folder_path)
+    try:
+        return folder in file.parents
+    except Exception:
+        return False
+
+
 def download_from_gcs(bucket_name: str, src_folder: str, dest_folder: str) -> None:
     """
     Download all files from a GCS bucket folder to a local directory.
@@ -106,7 +126,7 @@ def download_from_gcs(bucket_name: str, src_folder: str, dest_folder: str) -> No
     all_blobs = bucket.list_blobs()
 
     for blob in all_blobs:
-        if blob.name == src_folder or blob.name.endswith("/"):
+        if blob.name.endswith("/") or not is_in_folder(blob.name, src_folder):
             continue
 
         dest_path = os.path.join(dest_folder, blob.name)

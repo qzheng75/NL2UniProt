@@ -35,11 +35,11 @@ dataset:
   dataset_args:
     train:
       data_path: raw_data/fasta_files/latest_human_seqs.fasta
-      desc_path: raw_data/misc/train_descriptions.json
+      desc_path: raw_data/descriptions/train_descriptions.json
       use_ratio: 1.0
     val:
       data_path: raw_data/fasta_files/latest_human_seqs.fasta
-      desc_path: raw_data/misc/val_descriptions.json
+      desc_path: raw_data/descriptions/val_descriptions.json
       use_ratio: 1.0
 
 dataloader:
