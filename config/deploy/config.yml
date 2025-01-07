@@ -10,6 +10,7 @@ model:
     num_unfrozen_bert_layers: 4
     num_unfrozen_esm_layers: 4
     init_method: xavier
+    use_pretrain_weights: False
   quantize: True
 
 optimizer:
