@@ -28,6 +28,42 @@ Sequence with id ``A0A1B0GTW7`` (`UniProt Entry <https://www.uniprot.org/uniprot
 
   I want a protein with metal ion binding and peptidase activity properties.
 
-With the current deployed version, we test on 2000 descriptions with the above three level of granularity.
-The performances are listed in the table below.
+With the current deployed version, we test on 6000 descriptions with the above three level of granularity (2000 for each level).
+The performances are listed in the table below. TopK accuracy here is defined as the rate that the desired sequence appears in the top K
+sequences recommended by the method. As there might be various sequences satisfying a description, and the less detailed the description is, 
+the more sequences it corresponds with, we select different K for the three scenarios.
+
+.. list-table:: High-level Granularity
+   :widths: 25 25 25
+   :header-rows: 1
+
+   * - Top 10 Accuracy
+     - Top 20 Accuracy
+     - Top 50 Accuracy
+   * - 70.40%
+     - 83.65%
+     - 93.75%
+
+.. list-table:: Medium-level Granularity
+   :widths: 25 25 25
+   :header-rows: 1
+
+   * - Top 50 Accuracy
+     - Top 100 Accuracy
+     - Top 150 Accuracy
+   * - 81.20%
+     - 89.20%
+     - 92.80%
+
+.. list-table:: Low-level Granularity
+   :widths: 25 25 25
+   :header-rows: 1
+
+   * - Top 100 Accuracy
+     - Top 150 Accuracy
+     - Top 200 Accuracy
+   * - 77.50%
+     - 82.20%
+     - 85.90%
+
                                  
