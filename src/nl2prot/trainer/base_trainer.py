@@ -121,6 +121,9 @@ class BaseTrainer(ABC):
         if checkpoint_path is None:
             return
 
+        nl2prot_path = os.environ.get("NL2PROT_PATH", ".")
+        checkpoint_path = os.path.join(nl2prot_path, checkpoint_path)
+
         device = self.device if isinstance(self.device, str) else f"cuda:{self.device}"
         checkpoint = torch.load(checkpoint_path, map_location=device)
         self.curr_epoch = checkpoint["epoch"] + 1

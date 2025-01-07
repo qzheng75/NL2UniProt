@@ -12,18 +12,22 @@ from nl2prot.validate.embedding import compute_embeddings, get_trainer
 
 class NL2ProtAPI:
     def __init__(self, config: str | None = None):
+        nl2prot_path = os.environ.get("NL2PROT_PATH", ".")
+
         if config is None:
-            assert os.path.exists(
-                "config/deploy/config.yml"
-            ), "You must provide a configuration file"
-            config = "config/deploy/config.yml"
+            config = os.path.join(nl2prot_path, "config/deploy/config.yml")
+            assert os.path.exists(config), "You must provide a configuration file"
 
         with open(config, "r") as f:
             self.config = yaml.safe_load(f)
 
         ckpt_path = pathlib.Path(
-            self.config["trainer"]["trainer_args"]["resume_from_checkpoint"]
+            os.path.join(
+                nl2prot_path,
+                self.config["trainer"]["trainer_args"]["resume_from_checkpoint"],
+            )
         )
+
         folder, _ = ckpt_path.parent, ckpt_path.name
 
         seq_embed_path = os.path.join(folder, "seq_embed.h5ad")

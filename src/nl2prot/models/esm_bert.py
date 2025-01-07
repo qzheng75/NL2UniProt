@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from nl2prot.models.base_model import BaseDualEncoder
 from torch import Tensor, nn
-from transformers import BertModel, EsmModel
+from transformers import BertConfig, BertModel, EsmConfig, EsmModel
 
 
 class ProjectionEncoder(nn.Module):
@@ -38,15 +38,20 @@ class EsmBertEncoder(BaseDualEncoder):
         num_unfrozen_bert_layers: int = 2,
         num_unfrozen_esm_layers: int = 2,
         init_method: Literal["normal", "xavier"] = "normal",
+        use_pretrain_weights: bool = True,
     ):
         super(EsmBertEncoder, self).__init__()
 
-        bert = BertModel.from_pretrained(
-            bert_model_name, cache_dir=os.environ["MODEL_CACHE"]
-        )
-        esm = EsmModel.from_pretrained(
-            esm_model_name, cache_dir=os.environ["MODEL_CACHE"]
-        )
+        if use_pretrain_weights:
+            bert = BertModel.from_pretrained(
+                bert_model_name, cache_dir=os.environ["MODEL_CACHE"]
+            )
+            esm = EsmModel.from_pretrained(
+                esm_model_name, cache_dir=os.environ["MODEL_CACHE"]
+            )
+        else:
+            bert = BertModel(BertConfig.from_pretrained(bert_model_name))
+            esm = EsmModel(EsmConfig.from_pretrained(esm_model_name))
 
         self._freeze_bert_layers(bert, num_unfrozen_bert_layers)
         self._freeze_esm_layers(esm, num_unfrozen_esm_layers)
