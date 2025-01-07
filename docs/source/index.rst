@@ -5,7 +5,9 @@ Welcome to NL2UniProt's documentation!
 in UniProt database with natural language descriptions with a *simple* and *intuitive* API.
 
 Check out the :doc:`usage` section for further information, including
-how to :ref:`installation` the project.
+how to :ref:`installation` the project and how to :ref:`api_use` the project with its API.
+
+To get an overview of the performance of our method, checkout the :doc:`results` section.
 
 .. note::
 
@@ -17,3 +19,4 @@ Contents
 .. toctree::
 
    usage
+   results
