@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import random
 from collections.abc import Callable
 from itertools import chain
@@ -78,6 +79,10 @@ class RawDescSeqDataset(Dataset):
     def __init__(
         self, data_path: str, desc_path: str, use_copy: list[int] | None = None
     ):
+        nl2prot_path = os.environ.get("NL2PROT_PATH", ".")
+        data_path = os.path.join(nl2prot_path, data_path)
+        desc_path = os.path.join(nl2prot_path, desc_path)
+
         desc: dict[str, str] = {
             entry["id"]: entry["description"]
             for entry in json.load(open(desc_path, "r"))

@@ -13,7 +13,7 @@ pip install -e .
 
 # You may need to change the cuda version to match your system
 pip uninstall torch torchvision torchaudio
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+pip install torch
 
 # Optional: Install flash-attn and faesm[flash_attn]
 if [ $use_flash_attn == "True" ]; then
